@@ -69,7 +69,9 @@ FOUNDATION_STATIC_INLINE NSUInteger SDCacheCostForImage(UIImage *image) {
 
 @interface SDImageCache ()
 
+// NSCache类似于NSMutableDictionary
 @property (strong, nonatomic) NSCache *memCache;
+
 @property (strong, nonatomic) NSString *diskCachePath;
 @property (strong, nonatomic) NSMutableArray *customPaths;
 @property (SDDispatchQueueSetterSementics, nonatomic) dispatch_queue_t ioQueue;
@@ -338,7 +340,6 @@ FOUNDATION_STATIC_INLINE NSUInteger SDCacheCostForImage(UIImage *image) {
 }
 
 - (UIImage *)imageFromMemoryCacheForKey:(NSString *)key {
-    
     return [self.memCache objectForKey:key];
 }
 
@@ -394,6 +395,7 @@ FOUNDATION_STATIC_INLINE NSUInteger SDCacheCostForImage(UIImage *image) {
 }
 
 - (UIImage *)diskImageForKey:(NSString *)key {
+    
     NSData *data = [self diskImageDataBySearchingAllPathsForKey:key];
     if (data) {
         UIImage *image = [UIImage sd_imageWithData:data];
@@ -430,21 +432,29 @@ FOUNDATION_STATIC_INLINE NSUInteger SDCacheCostForImage(UIImage *image) {
         doneBlock(image, SDImageCacheTypeMemory);
         return nil;
     }
-
+    // 创建NSOperation（抽象类）
     NSOperation *operation = [NSOperation new];
+    // 串行队列 异步任务 会开启条子线程
     dispatch_async(self.ioQueue, ^{
+//        如果operation取消 就返回
         if (operation.isCancelled) {
             return;
         }
 
         @autoreleasepool {
+            // 通过key获取磁盘中的image
+            // 需要仔细看 diskImageForKey:方法 ？？？
             UIImage *diskImage = [self diskImageForKey:key];
+            
             if (diskImage && self.shouldCacheImagesInMemory) {
+                // 将从磁盘中读取的image 添加到内存中
+                // cost ???
                 NSUInteger cost = SDCacheCostForImage(diskImage);
                 [self.memCache setObject:diskImage forKey:key cost:cost];
             }
-
+            // 主队列回调
             dispatch_async(dispatch_get_main_queue(), ^{
+                // 磁盘缓存类型
                 doneBlock(diskImage, SDImageCacheTypeDisk);
             });
         }

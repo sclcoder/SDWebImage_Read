@@ -54,6 +54,7 @@ typedef void(^SDWebImageCalculateSizeBlock)(NSUInteger fileCount, NSUInteger tot
 
 /**
  * use memory cache [defaults to YES]
+    是否使用内存缓存
  */
 @property (assign, nonatomic) BOOL shouldCacheImagesInMemory;
 
