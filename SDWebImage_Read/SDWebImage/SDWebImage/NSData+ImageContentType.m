@@ -10,8 +10,19 @@
 
 + (NSString *)sd_contentTypeForImageData:(NSData *)data {
     uint8_t c;
+    /**
+     Copies a number of bytes from the start of the receiver's data into a given buffer.
+     The number of bytes copied is the smaller of the length parameter and the length of the data encapsulated in the object.
+     Parameters
+     buffer
+     A buffer into which to copy data.
+     length
+     The number of bytes from the start of the receiver's data to copy to buffer.
+     */
+    // 获取第一个字节
     [data getBytes:&c length:1];
     switch (c) {
+            // 判断图片类型
         case 0xFF:
             return @"image/jpeg";
         case 0x89:

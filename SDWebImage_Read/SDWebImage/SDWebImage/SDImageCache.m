@@ -190,6 +190,7 @@ FOUNDATION_STATIC_INLINE NSUInteger SDCacheCostForImage(UIImage *image) {
 }
 
 - (NSString *)cachePathForKey:(NSString *)key inPath:(NSString *)path {
+    // 找到key对应的文件路径
     NSString *filename = [self cachedFileNameForKey:key];
     return [path stringByAppendingPathComponent:filename];
 }
@@ -199,7 +200,7 @@ FOUNDATION_STATIC_INLINE NSUInteger SDCacheCostForImage(UIImage *image) {
 }
 
 #pragma mark SDImageCache (private)
-
+// MD5编码后的文件名字
 - (NSString *)cachedFileNameForKey:(NSString *)key {
     const char *str = [key UTF8String];
     if (str == NULL) {
@@ -340,6 +341,7 @@ FOUNDATION_STATIC_INLINE NSUInteger SDCacheCostForImage(UIImage *image) {
 }
 
 - (UIImage *)imageFromMemoryCacheForKey:(NSString *)key {
+    // 使用NSCache对象
     return [self.memCache objectForKey:key];
 }
 
@@ -362,11 +364,14 @@ FOUNDATION_STATIC_INLINE NSUInteger SDCacheCostForImage(UIImage *image) {
 }
 
 - (NSData *)diskImageDataBySearchingAllPathsForKey:(NSString *)key {
+    // key对应文件的默认路径
     NSString *defaultPath = [self defaultCachePathForKey:key];
     NSData *data = [NSData dataWithContentsOfFile:defaultPath];
     if (data) {
         return data;
     }
+    
+    /// 待看???
 
     // fallback because of https://github.com/rs/SDWebImage/pull/976 that added the extension to the disk file name
     // checking the key with and without the extension
@@ -395,10 +400,12 @@ FOUNDATION_STATIC_INLINE NSUInteger SDCacheCostForImage(UIImage *image) {
 }
 
 - (UIImage *)diskImageForKey:(NSString *)key {
-    
+    // 找到key对应的image数据
     NSData *data = [self diskImageDataBySearchingAllPathsForKey:key];
     if (data) {
+        // data转成image
         UIImage *image = [UIImage sd_imageWithData:data];
+        
         image = [self scaledImageForKey:key image:image];
         if (self.shouldDecompressImages) {
             image = [UIImage decodedImageWithImage:image];
@@ -443,13 +450,20 @@ FOUNDATION_STATIC_INLINE NSUInteger SDCacheCostForImage(UIImage *image) {
 
         @autoreleasepool {
             // 通过key获取磁盘中的image
-            // 需要仔细看 diskImageForKey:方法 ？？？
+            // 需要仔细看 diskImageForKey:方法
             UIImage *diskImage = [self diskImageForKey:key];
             
             if (diskImage && self.shouldCacheImagesInMemory) {
                 // 将从磁盘中读取的image 添加到内存中
-                // cost ???
+                // 使用NSCache缓存image
                 NSUInteger cost = SDCacheCostForImage(diskImage);
+                /***
+                 Sets the value of the specified key in the cache, and associates the key-value pair with the specified cost.
+                 
+                 The cost value is used to compute a sum encompassing the costs of all the objects in the cache. When memory is limited or when the total cost of the cache eclipses the maximum allowed toxtal cost, the cache could begin an eviction process to remove some of its elements. However, this eviction process is not in a guaranteed order. As a consequence, if you try to manipulate the cost values to achieve some specific behavior, the consequences could be detrimental to your program. Typically, the obvious cost is the size of the value in bytes. If that information is not readily available, you should not go through the trouble of trying to compute it, as doing so will drive up the cost of using the cache. Pass in 0 for the cost value if you otherwise have nothing useful to pass, or simply use the setObject:forKey: method, which does not require a cost value to be passed in.
+                 
+                 Unlike an NSMutableDictionary object, a cache does not copy the key objects that are put into it.
+                 */
                 [self.memCache setObject:diskImage forKey:key cost:cost];
             }
             // 主队列回调

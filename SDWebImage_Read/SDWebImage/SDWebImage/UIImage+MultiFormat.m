@@ -23,7 +23,9 @@
     }
     
     UIImage *image;
+    // 获取图片类型
     NSString *imageContentType = [NSData sd_contentTypeForImageData:data];
+    // gif类型
     if ([imageContentType isEqualToString:@"image/gif"]) {
         image = [UIImage sd_animatedGIFWithData:data];
     }
