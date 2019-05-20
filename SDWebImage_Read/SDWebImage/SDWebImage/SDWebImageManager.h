@@ -195,7 +195,7 @@ SDWebImageManager *manager = [SDWebImageManager sharedManager];
 
  * @endcode
  */
-// 自定义图片缓存的key
+// 自定义图片缓存key的回调
 @property (nonatomic, copy) SDWebImageCacheKeyFilterBlock cacheKeyFilter;
 
 /**
@@ -310,6 +310,13 @@ SDWebImageManager *manager = [SDWebImageManager sharedManager];
 - (NSString *)cacheKeyForURL:(NSURL *)url;
 
 @end
+
+
+
+
+
+
+
 
 
 #pragma mark - Deprecated

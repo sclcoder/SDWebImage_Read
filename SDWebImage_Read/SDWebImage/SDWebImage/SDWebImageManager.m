@@ -50,13 +50,14 @@
      *1.获得一个SDImageCache的单例
      *2.获得一个SDWebImageDownloader的单例
      *3.新建一个MutableSet来存储下载失败的url
-     *4.新建一个用来存储下载operation的可遍数组
+     *4.新建一个用来存储正在运行的operation的可变数组
      */
     if ((self = [super init])) {
         _imageCache = cache;
         _imageDownloader = downloader;
-        // 黑名单
+        // 下载失败的url--黑名单
         _failedURLs = [NSMutableSet new];
+        // 运行中的operation
         _runningOperations = [NSMutableArray new];
     }
     return self;
@@ -73,10 +74,12 @@
         return [url absoluteString];
     }
 }
-
+// MARK:TODO:查看缓存类
 - (BOOL)cachedImageExistsForURL:(NSURL *)url {
     NSString *key = [self cacheKeyForURL:url];
+    // 优先检查内存
     if ([self.imageCache imageFromMemoryCacheForKey:key] != nil) return YES;
+    // 内存中不存在,再检查硬盘中是否存在
     return [self.imageCache diskImageExistsWithKey:key];
 }
 
@@ -85,6 +88,7 @@
     return [self.imageCache diskImageExistsWithKey:key];
 }
 
+// 异步查询是否存在
 - (void)cachedImageExistsForURL:(NSURL *)url
                      completion:(SDWebImageCheckCacheCompletionBlock)completionBlock {
     NSString *key = [self cacheKeyForURL:url];
@@ -121,12 +125,15 @@
     }];
 }
 
+// 下载
 - (id <SDWebImageOperation>)downloadImageWithURL:(NSURL *)url
                                          options:(SDWebImageOptions)options
                                         progress:(SDWebImageDownloaderProgressBlock)progressBlock
                                        completed:(SDWebImageCompletionWithFinishedBlock)completedBlock {
-    // Invoking this method without a completedBlock is pointless
+    // Invoking this method without a completedBlock is pointless(无意义的)
+    // 预加载可以使用SDWebImagePrefetcher这个类实现
     NSAssert(completedBlock != nil, @"If you mean to prefetch the image, use -[SDWebImagePrefetcher prefetchURLs] instead");
+    
 
     // Very common mistake is to send the URL using NSString object instead of NSURL. For some strange reason, XCode won't
     // throw any warning for this type mismatch. Here we failsafe（失效保护）this error by allowing URLs to be passed as NSString.
@@ -139,18 +146,20 @@
         url = nil;
     }
 
-    // 生产SDWebImageCombinedOperation
+    // 创建SDWebImageCombinedOperation对象
+    // __block是为了在block内部可以修改operation的值
     __block SDWebImageCombinedOperation *operation = [SDWebImageCombinedOperation new];
     __weak SDWebImageCombinedOperation *weakOperation = operation;
 
     BOOL isFailedUrl = NO;
-    // 访问failedURLs时加锁
+    
     /**
-     @synchronized是OC中一种方便地创建互斥锁的方式--它可以防止不同线程在同一时间执行区块的代码
+     @synchronized是OC中一种方便地创建互斥锁的方式
      self.failedURLs是一个NSSet类型的集合,里面存放的都是下载失败的图片的url,failedURLs不是NSArray类型的原因是:
-     在搜索一个个元素的时候NSSet比NSArray效率高,主要是它用到了一个算法hash(散列,哈希) ,比如你要存储A,一个hash算法直接就能找到A应该存储的位置;同样当你要访问A的时候,一个hash过程就能找到A存储的位置,对于NSArray,若想知道A到底在不在数组中,则需要遍历整个数据,显然效率较低了
+     NSSet的底层使用的可能是哈希表、红黑树这样的数据结构,查找效率很高。数组的查找效率太低了。
      */
     
+    // 访问failedURLs时加锁
     @synchronized (self.failedURLs) {
         // url是否在黑名单中
         isFailedUrl = [self.failedURLs containsObject:url];
@@ -162,15 +171,22 @@
             NSError *error = [NSError errorWithDomain:NSURLErrorDomain code:NSURLErrorFileDoesNotExist userInfo:nil];
             completedBlock(nil, error, SDImageCacheTypeNone, YES, url);
         });
+        // 退出 返回operation
         return operation;
     }
+    
     // 访问runningOperations时 加锁“self.runningOperations”
     @synchronized (self.runningOperations) {
-        // 将生成SDWebImageCombinedOperation加入到数组中
+        // 将operation加入到runningOperations数组中 注意这里加载的是operation而不是weakOperation
         [self.runningOperations addObject:operation];
     }
     // 生成缓存key
     NSString *key = [self cacheKeyForURL:url];
+    
+    /**
+        NSOperation是OC中多线程技术的一种,是对GCD的OC包装.它包含队列(NSOperationQueue)和操作(NSOperation)两个基本要素.
+     
+     */
     
     // cacheOperation是NSOperation类型
     operation.cacheOperation = [self.imageCache queryDiskCacheForKey:key done:^(UIImage *image, SDImageCacheType cacheType) {
@@ -361,6 +377,7 @@
     }
 }
 
+// 实现<SDWebImageOperation>协议中的cancel方法
 - (void)cancel {
     self.cancelled = YES;
     if (self.cacheOperation) {
@@ -378,6 +395,16 @@
 }
 
 @end
+
+
+
+
+
+
+
+
+
+
 
 
 @implementation SDWebImageManager (Deprecated)

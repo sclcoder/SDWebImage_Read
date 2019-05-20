@@ -67,6 +67,9 @@ static char TAG_ACTIVITY_SHOW;
         __weak __typeof(self)wself = self;
         // 开始下载图片
         id <SDWebImageOperation> operation = [SDWebImageManager.sharedManager downloadImageWithURL:url options:options progress:progressBlock completed:^(UIImage *image, NSError *error, SDImageCacheType cacheType, BOOL finished, NSURL *imageURL) {
+            
+            /****  图片下载完成后的处理    ****/
+            
             // 移除菊花指示器
             [wself removeActivityIndicator];
             
