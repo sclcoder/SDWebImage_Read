@@ -24,7 +24,8 @@
     
     // 展示加载时的菊花
     [_imageView setShowActivityIndicatorView:YES];
-    [_imageView sd_setImageWithURL:url placeholderImage:[UIImage imageNamed:@"sunchunlei.png"] options:SDWebImageProgressiveDownload | SDWebImageCacheMemoryOnly];
+    [_imageView setBackgroundColor:[UIColor redColor]];
+    [_imageView sd_setImageWithURL:url placeholderImage:[UIImage imageNamed:@"sunchunlei.png"] options:SDWebImageDelayPlaceholder];
 
 //    [_imageView sd_setImageWithURL:url completed:^(UIImage *image, NSError *error, SDImageCacheType cacheType, NSURL *imageURL) {
 //        

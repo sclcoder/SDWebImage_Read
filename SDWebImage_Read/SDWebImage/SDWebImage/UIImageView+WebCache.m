@@ -41,71 +41,77 @@ static char TAG_ACTIVITY_SHOW;
     [self sd_setImageWithURL:url placeholderImage:placeholder options:options progress:nil completed:completedBlock];
 }
 
+// 下载的最终方法
 - (void)sd_setImageWithURL:(NSURL *)url placeholderImage:(UIImage *)placeholder options:(SDWebImageOptions)options progress:(SDWebImageDownloaderProgressBlock)progressBlock completed:(SDWebImageCompletionBlock)completedBlock {
     
-    // 取消当前image的加载
+    // 先取消当前imageView的加载
     [self sd_cancelCurrentImageLoad];
     
-    // 将 url作为属性绑定到ImageView上,用static char imageURLKey作key
+    // 关联对象，对象保存图片地址
     objc_setAssociatedObject(self, &imageURLKey, url, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
     
     // 不是SDWebImageDelayPlaceholder 就设置placeholder
     if (!(options & SDWebImageDelayPlaceholder)) {
-        // sd写的一个宏 保证在主线程执行
+        // 主线程执行异步任务
         dispatch_main_async_safe(^{
             self.image = placeholder;
         });
     }
     
     if (url) {
-
-        // check if activityView is enabled or not
-        // 是否展示菊花指示器
+        // check if activityView is enabled or not 是否展示菊花指示器
         if ([self showActivityIndicatorView]) {
             [self addActivityIndicator];
         }
-        
-        // 使用一个weak指针引用self 防止block中copy时导致循环引用
+        // sharedManager是个单例 为了避免内存泄漏使用__weak修饰self
         __weak __typeof(self)wself = self;
-        
+        // 开始下载图片
         id <SDWebImageOperation> operation = [SDWebImageManager.sharedManager downloadImageWithURL:url options:options progress:progressBlock completed:^(UIImage *image, NSError *error, SDImageCacheType cacheType, BOOL finished, NSURL *imageURL) {
             // 移除菊花指示器
             [wself removeActivityIndicator];
+            
+            // self被释放的场景??
             if (!wself) return;
+            
+            // 主线程同步任务
             dispatch_main_sync_safe(^{
+                
                 if (!wself) return;
-                /**
-                    SDWebImageAvoidAutoSetImage 下载网图片后 让调用者自己处理image
-                 */
+                
+                //  SDWebImageAvoidAutoSetImage(关闭自动设置image)选项时下载网图片后 让调用者自己处理image
                 if (image && (options & SDWebImageAvoidAutoSetImage) && completedBlock)
                 {
+                    // SDWebImageProgressiveDownloads开启时,会调用多次改回调
                     completedBlock(image, error, cacheType, url);
                     return;
                 }
                 else if (image) {
+                    // 图片下载完自动设置image
                     wself.image = image;
                     [wself setNeedsLayout];
                 } else {
-                    //SDWebImageDelayPlaceholder 下载图片失败后设置占位图
+                    // 下载图片失败后设置占位图
                     if ((options & SDWebImageDelayPlaceholder)) {
                         wself.image = placeholder;
                         [wself setNeedsLayout];
                     }
                 }
                 if (completedBlock && finished) {
+                    // finished图片完全下载完,进行回调
                     completedBlock(image, error, cacheType, url);
                 }
             });
         }];
         
-        // 设置load操作
+        // 将该operation添加到operationDictionary:每个调用sd_setImageLoadOperation方法的对象被都添加了一个operationDictionary
         [self sd_setImageLoadOperation:operation forKey:@"UIImageViewImageLoad"];
         
         
     } else {
-        // 设置错误信息
+        // 主线程异步
         dispatch_main_async_safe(^{
             [self removeActivityIndicator];
+            // 设置错误信息
             if (completedBlock) {
                 NSError *error = [NSError errorWithDomain:SDWebImageErrorDomain code:-1 userInfo:@{NSLocalizedDescriptionKey : @"Trying to load a nil url"}];
                 completedBlock(nil, error, SDImageCacheTypeNone, url);
@@ -115,13 +121,17 @@ static char TAG_ACTIVITY_SHOW;
 }
 
 - (void)sd_setImageWithPreviousCachedImageWithURL:(NSURL *)url placeholderImage:(UIImage *)placeholder options:(SDWebImageOptions)options progress:(SDWebImageDownloaderProgressBlock)progressBlock completed:(SDWebImageCompletionBlock)completedBlock {
+    
+    // 通过url查找缓存的图片
     NSString *key = [[SDWebImageManager sharedManager] cacheKeyForURL:url];
     UIImage *lastPreviousCachedImage = [[SDImageCache sharedImageCache] imageFromDiskCacheForKey:key];
-    
+    // 通过缓存的图设置占位图
     [self sd_setImageWithURL:url placeholderImage:lastPreviousCachedImage ?: placeholder options:options progress:progressBlock completed:completedBlock];    
 }
 
 - (NSURL *)sd_imageURL {
+    // 使用runtime为imageView对象添加一个关联变量imageURLKey
+    // 回去imageView对象的图像地址
     return objc_getAssociatedObject(self, &imageURLKey);
 }
 
@@ -157,6 +167,8 @@ static char TAG_ACTIVITY_SHOW;
 }
 
 - (void)sd_cancelCurrentImageLoad {
+    // 通过传入“UIImageViewImageLoad”来取消image的load操作
+    // sd_cancelImageLoadOperationWithKey是分类UIView+WebCacheOperation的方法
     [self sd_cancelImageLoadOperationWithKey:@"UIImageViewImageLoad"];
 }
 

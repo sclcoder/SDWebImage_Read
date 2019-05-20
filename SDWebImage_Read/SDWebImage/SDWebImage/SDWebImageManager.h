@@ -16,67 +16,73 @@ typedef NS_OPTIONS(NSUInteger, SDWebImageOptions) {
      * By default, when a URL fail to be downloaded, the URL is blacklisted so the library won't keep trying.
      * This flag disable this blacklisting.
      */
-    // 图片的url加载失败重试 默认失败的url会进入黑名单
+    // 关闭黑名单-默认请求失败的url会进入黑名单
     SDWebImageRetryFailed = 1 << 0,
 
     /**
      * By default, image downloads are started during UI interactions, this flags disable this feature,
      * leading to delayed download on UIScrollView deceleration for instance.
      */
-    // UI进行交互时 不加载image
+    // 关闭UI进行交互时下载image
     SDWebImageLowPriority = 1 << 1,
 
     /**
      * This flag disables on-disk caching
      */
-    // 内存缓存
+    // 关闭硬盘缓存-内存缓存
     SDWebImageCacheMemoryOnly = 1 << 2,
 
     /**
      * This flag enables progressive download, the image is displayed progressively during download as a browser would do.
      * By default, the image is only displayed once completely downloaded.
      */
-    // 加载图像时 从上到下加载
+    // 开启图像渐进式加载 默认为图片加载完成时才展示
     SDWebImageProgressiveDownload = 1 << 3,
 
     /**
      * Even if the image is cached, respect the HTTP response cache control, and refresh the image from remote location if needed.
-     * The disk caching will be handled by NSURLCache instead of SDWebImage leading to slight performance degradation.
-     * This option helps deal with images changing behind the same request URL, e.g. Facebook graph api profile pics.
+     * The disk caching will be handled by NSURLCache instead of SDWebImage leading to slight performance degradation. 硬盘缓存会使用NSURLCache
+     * This option helps deal with images changing behind the same request URL, e.g. Facebook graph api profile pics. 该选项用来处理同一个地址下图片更改的情景
      * If a cached image is refreshed, the completion block is called once with the cached image and again with the final image.
      *
      * Use this flag only if you can't make your URLs static with embedded cache busting parameter.
      */
+    // 刷新缓存: 什么使用场景? 没搞清楚
     SDWebImageRefreshCached = 1 << 4,
 
     /**
      * In iOS 4+, continue the download of the image if the app goes to background. This is achieved by asking the system for
      * extra time in background to let the request finish. If the background task expires the operation will be cancelled.
      */
+    // 后台继续下载
     SDWebImageContinueInBackground = 1 << 5,
 
     /**
      * Handles cookies stored in NSHTTPCookieStore by setting
      * NSMutableURLRequest.HTTPShouldHandleCookies = YES;
      */
+    // 处理cookies
     SDWebImageHandleCookies = 1 << 6,
 
     /**
      * Enable to allow untrusted SSL certificates.
      * Useful for testing purposes. Use with caution in production.
      */
+    // 允许无效证书
     SDWebImageAllowInvalidSSLCertificates = 1 << 7,
 
     /**
      * By default, images are loaded in the order in which they were queued. This flag moves them to
      * the front of the queue.
      */
+    // 默认请求时在队列中,设计高的优先级,可以将加载放到队列头部优先处理
     SDWebImageHighPriority = 1 << 8,
     
     /**
      * By default, placeholder images are loaded while the image is loading. This flag will delay the loading
      * of the placeholder image until after the image has finished loading.
      */
+    // 延迟加载placeholder:下载结束后再设置占位图 1.成功不用设置占位图 2.失败设置占位图
     SDWebImageDelayPlaceholder = 1 << 9,
 
     /**
@@ -84,6 +90,7 @@ typedef NS_OPTIONS(NSUInteger, SDWebImageOptions) {
      * as most transformation code would mangle it.
      * Use this flag to transform them anyway.
      */
+    // 转换？？？
     SDWebImageTransformAnimatedImage = 1 << 10,
     
     /**
@@ -91,10 +98,18 @@ typedef NS_OPTIONS(NSUInteger, SDWebImageOptions) {
      * have the hand before setting the image (apply a filter or add it with cross-fade animation for instance)
      * Use this flag if you want to manually set the image in the completion when success
      */
+    // 关闭自动设置image
     SDWebImageAvoidAutoSetImage = 1 << 11
 };
 
-// 几个block
+/**
+ This block has no return value
+ *                       and takes the requested UIImage as first parameter. In case of error the image parameter
+ *                       is nil and the second parameter may contain an NSError. The third parameter is a Boolean
+ *                       indicating if the image was retrieved from the local cache or from the network.
+ *                       The fourth parameter is the original image url.
+
+ */
 typedef void(^SDWebImageCompletionBlock)(UIImage *image, NSError *error, SDImageCacheType cacheType, NSURL *imageURL);
 
 typedef void(^SDWebImageCompletionWithFinishedBlock)(UIImage *image, NSError *error, SDImageCacheType cacheType, BOOL finished, NSURL *imageURL);
@@ -154,25 +169,25 @@ SDWebImageManager *manager = [SDWebImageManager sharedManager];
 
  * @endcode
  */
+
+// SDWebImageManager绑定了带有缓存机制的异步下载器SDWebImageDownloader。可以直接使用改类,没必要必须在配合UIView使用。
 @interface SDWebImageManager : NSObject
-
+// 管理者代理
 @property (weak, nonatomic) id <SDWebImageManagerDelegate> delegate;
-
+// 图片缓存类
 @property (strong, nonatomic, readonly) SDImageCache *imageCache;
+// 图片下载器
 @property (strong, nonatomic, readonly) SDWebImageDownloader *imageDownloader;
 
 /**
  * The cache filter is a block used each time SDWebImageManager need to convert an URL into a cache key. This can
  * be used to remove dynamic part of an image URL.
-
-    每次SDWebImageManager需要将url转化为cachekey的时候回调用这个block.这个block主要用来让调用者根据自定义cachekey.
  *
  * The following example sets a filter in the application delegate that will remove any query-string from the
  * URL before to use it as a cache key:
  *
  * @code
  
-    这个例子中将url中的queryString移除
 [[SDWebImageManager sharedManager] setCacheKeyFilter:^(NSURL *url) {
     url = [[NSURL alloc] initWithScheme:url.scheme host:url.host path:url.path];
     return [url absoluteString];
@@ -180,6 +195,7 @@ SDWebImageManager *manager = [SDWebImageManager sharedManager];
 
  * @endcode
  */
+// 自定义图片缓存的key
 @property (nonatomic, copy) SDWebImageCacheKeyFilterBlock cacheKeyFilter;
 
 /**
@@ -197,17 +213,12 @@ SDWebImageManager *manager = [SDWebImageManager sharedManager];
 
 /**
  * Downloads the image at the given URL if not present in cache or return the cached version otherwise.
-    若图片不在cache中,就根据给定的URL下载图片,否则返回cache中的图片
  *
  * @param url            The URL to the image
-   第一个参数是必须的,就是image的url
  * @param options        A mask to specify options to use for this request
-   第二个参数options你可以定制化各种各样的操作
  
  * @param progressBlock  A block called while image is downloading
-   第三个参数是一个回调block,用于图片下载过程中的回调
  * @param completedBlock A block called when operation has been completed.
- *  一个下载完成的回调,会在图片下载完成后回调
  
  *   This parameter is required.
  * 
@@ -224,11 +235,9 @@ SDWebImageManager *manager = [SDWebImageManager sharedManager];
  *
  
  * @return Returns an NSObject conforming to SDWebImageOperation. Should be an instance of SDWebImageDownloaderOperation
- 
-    返回值是一个NSObject类,并且这个NSObject类是遵循一个协议这个协议叫SDWebImageOperation,这个协议里面只写了一个协议,就是一个cancel一个operation的协议
- */
+  */
 
-
+// 下载图片--返回值是一个遵守SDWebImageOperation协议的对象
 - (id <SDWebImageOperation>)downloadImageWithURL:(NSURL *)url
                                          options:(SDWebImageOptions)options
                                         progress:(SDWebImageDownloaderProgressBlock)progressBlock
