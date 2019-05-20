@@ -10,6 +10,8 @@
 #import "SDWebImageCompat.h"
 #import "SDWebImageManager.h"
 
+// 设置UIImageView在高亮状态下的图片
+
 /**
  * Integrates SDWebImage async downloading and caching of remote images with UIImageView for highlighted state.
  */

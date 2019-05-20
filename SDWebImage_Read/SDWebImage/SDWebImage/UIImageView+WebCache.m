@@ -41,7 +41,7 @@ static char TAG_ACTIVITY_SHOW;
     [self sd_setImageWithURL:url placeholderImage:placeholder options:options progress:nil completed:completedBlock];
 }
 
-// 下载的最终方法
+// 加载单张图的最终方法
 - (void)sd_setImageWithURL:(NSURL *)url placeholderImage:(UIImage *)placeholder options:(SDWebImageOptions)options progress:(SDWebImageDownloaderProgressBlock)progressBlock completed:(SDWebImageCompletionBlock)completedBlock {
     
     // 先取消当前imageView的加载
@@ -130,23 +130,28 @@ static char TAG_ACTIVITY_SHOW;
 }
 
 - (NSURL *)sd_imageURL {
-    // 使用runtime为imageView对象添加一个关联变量imageURLKey
-    // 回去imageView对象的图像地址
     return objc_getAssociatedObject(self, &imageURLKey);
 }
-
+// 加载一组Url
 - (void)sd_setAnimationImagesWithURLs:(NSArray *)arrayOfURLs {
+    // 取消一组operations
     [self sd_cancelCurrentAnimationImagesLoad];
+    
     __weak __typeof(self)wself = self;
 
     NSMutableArray *operationsArray = [[NSMutableArray alloc] init];
 
     for (NSURL *logoImageURL in arrayOfURLs) {
+        
         id <SDWebImageOperation> operation = [SDWebImageManager.sharedManager downloadImageWithURL:logoImageURL options:0 progress:nil completed:^(UIImage *image, NSError *error, SDImageCacheType cacheType, BOOL finished, NSURL *imageURL) {
+            
             if (!wself) return;
             dispatch_main_sync_safe(^{
+                // 强引用wself 防止在操作时被释放
                 __strong UIImageView *sself = wself;
+                
                 [sself stopAnimating];
+                
                 if (sself && image) {
                     NSMutableArray *currentImages = [[sself animationImages] mutableCopy];
                     if (!currentImages) {
@@ -160,18 +165,21 @@ static char TAG_ACTIVITY_SHOW;
                 [sself startAnimating];
             });
         }];
+        // 将operation添加到数组中保存
         [operationsArray addObject:operation];
     }
 
+    // 将保存operation的数组添加到operationDictionary
     [self sd_setImageLoadOperation:[NSArray arrayWithArray:operationsArray] forKey:@"UIImageViewAnimationImages"];
 }
 
+
+// sd_cancelImageLoadOperationWithKey是分类UIView+WebCacheOperation的方法
+// 取消单张图片的加载
 - (void)sd_cancelCurrentImageLoad {
-    // 通过传入“UIImageViewImageLoad”来取消image的load操作
-    // sd_cancelImageLoadOperationWithKey是分类UIView+WebCacheOperation的方法
     [self sd_cancelImageLoadOperationWithKey:@"UIImageViewImageLoad"];
 }
-
+// 取消一组图片的加载
 - (void)sd_cancelCurrentAnimationImagesLoad {
     [self sd_cancelImageLoadOperationWithKey:@"UIImageViewAnimationImages"];
 }
@@ -209,6 +217,7 @@ static char TAG_ACTIVITY_SHOW;
         
         // 添加UIActivityIndicatorView
         dispatch_main_async_safe(^{
+            
             [self addSubview:self.activityIndicator];
 
             [self addConstraint:[NSLayoutConstraint constraintWithItem:self.activityIndicator
@@ -244,6 +253,16 @@ static char TAG_ACTIVITY_SHOW;
 @end
 
 
+
+
+
+
+
+
+
+
+
+/***********    废弃        *********/
 @implementation UIImageView (WebCacheDeprecated)
 
 - (NSURL *)imageURL {

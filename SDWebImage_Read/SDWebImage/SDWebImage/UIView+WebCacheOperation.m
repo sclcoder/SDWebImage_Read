@@ -27,7 +27,7 @@ static char loadOperationKey;
 }
 
 - (void)sd_setImageLoadOperation:(id)operation forKey:(NSString *)key {
-    // 取消之前的操作
+    // 取消之前的操作: 相同的key时operation会被覆盖掉,在设置之前先将请求取消掉
     [self sd_cancelImageLoadOperationWithKey:key];
     NSMutableDictionary *operationDictionary = [self operationDictionary];
     [operationDictionary setObject:operation forKey:key];

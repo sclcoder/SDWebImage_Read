@@ -45,6 +45,7 @@
                                              return;
                                          }
                                          else if (image) {
+                                             // 高亮状态
                                              wself.highlightedImage = image;
                                              [wself setNeedsLayout];
                                          }
@@ -71,6 +72,18 @@
 @end
 
 
+
+
+
+
+
+
+
+
+
+
+
+/***********    废弃   *************/
 @implementation UIImageView (HighlightedWebCacheDeprecated)
 
 - (void)setHighlightedImageWithURL:(NSURL *)url {
