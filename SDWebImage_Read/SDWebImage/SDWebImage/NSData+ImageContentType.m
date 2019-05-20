@@ -21,6 +21,8 @@
      */
     // 获取第一个字节
     [data getBytes:&c length:1];
+    
+    // 图片的头文件信息 https://www.cnblogs.com/Wendy_Yu/archive/2011/12/27/2303118.html
     switch (c) {
             // 判断图片类型
         case 0xFF:

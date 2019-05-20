@@ -13,8 +13,9 @@
 static char imageURLStorageKey;
 
 @implementation UIButton (WebCache)
-
+// imageURLStorage 存放的是不同状态下的url
 - (NSURL *)sd_currentImageURL {
+    
     NSURL *url = self.imageURLStorage[@(self.state)];
 
     if (!url) {
@@ -48,12 +49,16 @@ static char imageURLStorageKey;
     [self sd_setImageWithURL:url forState:state placeholderImage:placeholder options:0 completed:completedBlock];
 }
 
+
+
+// UIButton设置图片的最终方法
 - (void)sd_setImageWithURL:(NSURL *)url forState:(UIControlState)state placeholderImage:(UIImage *)placeholder options:(SDWebImageOptions)options completed:(SDWebImageCompletionBlock)completedBlock {
 
     [self setImage:placeholder forState:state];
     [self sd_cancelImageLoadForState:state];
     
     if (!url) {
+        // url不存在就清空之前保存的这个状态下的url 并报错
         [self.imageURLStorage removeObjectForKey:@(state)];
         
         dispatch_main_async_safe(^{
@@ -66,11 +71,14 @@ static char imageURLStorageKey;
         return;
     }
     
+    // 通过state保存url
     self.imageURLStorage[@(state)] = url;
 
     __weak __typeof(self)wself = self;
     id <SDWebImageOperation> operation = [SDWebImageManager.sharedManager downloadImageWithURL:url options:options progress:nil completed:^(UIImage *image, NSError *error, SDImageCacheType cacheType, BOOL finished, NSURL *imageURL) {
+        
         if (!wself) return;
+        
         dispatch_main_sync_safe(^{
             __strong UIButton *sself = wself;
             if (!sself) return;
@@ -87,8 +95,12 @@ static char imageURLStorageKey;
             }
         });
     }];
+    // 保存operation
     [self sd_setImageLoadOperation:operation forState:state];
 }
+
+
+
 
 - (void)sd_setBackgroundImageWithURL:(NSURL *)url forState:(UIControlState)state {
     [self sd_setBackgroundImageWithURL:url forState:state placeholderImage:nil options:0 completed:nil];
@@ -110,7 +122,10 @@ static char imageURLStorageKey;
     [self sd_setBackgroundImageWithURL:url forState:state placeholderImage:placeholder options:0 completed:completedBlock];
 }
 
+
+// UIButton设置背景图片的最终方法
 - (void)sd_setBackgroundImageWithURL:(NSURL *)url forState:(UIControlState)state placeholderImage:(UIImage *)placeholder options:(SDWebImageOptions)options completed:(SDWebImageCompletionBlock)completedBlock {
+    
     [self sd_cancelBackgroundImageLoadForState:state];
 
     [self setBackgroundImage:placeholder forState:state];
@@ -135,6 +150,8 @@ static char imageURLStorageKey;
                 }
             });
         }];
+        
+        // 保存该operation操作
         [self sd_setBackgroundImageLoadOperation:operation forState:state];
     } else {
         dispatch_main_async_safe(^{
@@ -163,6 +180,7 @@ static char imageURLStorageKey;
 }
 
 - (NSMutableDictionary *)imageURLStorage {
+    // 为button对象绑定一个storage字典
     NSMutableDictionary *storage = objc_getAssociatedObject(self, &imageURLStorageKey);
     if (!storage)
     {
@@ -176,6 +194,15 @@ static char imageURLStorageKey;
 @end
 
 
+
+
+
+
+
+
+
+
+/*********** 废弃 ***************/
 @implementation UIButton (WebCacheDeprecated)
 
 - (NSURL *)currentImageURL {
