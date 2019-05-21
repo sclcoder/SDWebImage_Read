@@ -24,17 +24,25 @@
                             <imageView userInteractionEnabled="NO" contentMode="scaleToFill" horizontalHuggingPriority="251" verticalHuggingPriority="251" translatesAutoresizingMaskIntoConstraints="NO" id="kkd-QY-E1v">
                                 <rect key="frame" x="100" y="120" width="175" height="247"/>
                             </imageView>
+                            <imageView userInteractionEnabled="NO" contentMode="scaleToFill" horizontalHuggingPriority="251" verticalHuggingPriority="251" translatesAutoresizingMaskIntoConstraints="NO" id="us5-d9-kUF">
+                                <rect key="frame" x="100" y="394" width="175" height="247"/>
+                            </imageView>
                         </subviews>
                         <color key="backgroundColor" red="1" green="1" blue="1" alpha="1" colorSpace="custom" customColorSpace="sRGB"/>
                         <constraints>
-                            <constraint firstItem="wfy-db-euE" firstAttribute="top" secondItem="kkd-QY-E1v" secondAttribute="bottom" constant="300" id="F8a-8R-IRb"/>
+                            <constraint firstItem="us5-d9-kUF" firstAttribute="leading" secondItem="8bC-Xf-vdC" secondAttribute="leadingMargin" constant="84" id="Ehd-FV-P9c"/>
+                            <constraint firstAttribute="trailingMargin" secondItem="us5-d9-kUF" secondAttribute="trailing" constant="84" id="J4K-BS-OgY"/>
                             <constraint firstItem="kkd-QY-E1v" firstAttribute="leading" secondItem="8bC-Xf-vdC" secondAttribute="leading" constant="100" id="Qrb-mM-7JH"/>
-                            <constraint firstItem="kkd-QY-E1v" firstAttribute="top" secondItem="y3c-jy-aDJ" secondAttribute="bottom" constant="100" id="kcy-Sa-pat"/>
+                            <constraint firstItem="kkd-QY-E1v" firstAttribute="top" secondItem="y3c-jy-aDJ" secondAttribute="bottom" constant="100" id="YjQ-HR-PII"/>
+                            <constraint firstItem="wfy-db-euE" firstAttribute="top" secondItem="kkd-QY-E1v" secondAttribute="bottom" constant="300" id="esl-b6-HdN"/>
                             <constraint firstAttribute="trailing" secondItem="kkd-QY-E1v" secondAttribute="trailing" constant="100" id="qgI-5p-MdN"/>
+                            <constraint firstItem="wfy-db-euE" firstAttribute="top" secondItem="us5-d9-kUF" secondAttribute="bottom" constant="26" id="qs5-5W-MpV"/>
+                            <constraint firstItem="us5-d9-kUF" firstAttribute="top" secondItem="kkd-QY-E1v" secondAttribute="bottom" constant="27" id="vpU-KY-DtS"/>
                         </constraints>
                     </view>
                     <connections>
                         <outlet property="imageView" destination="kkd-QY-E1v" id="Bua-6j-8Xo"/>
+                        <outlet property="imageView2" destination="us5-d9-kUF" id="PGc-rx-36O"/>
                     </connections>
                 </viewController>
                 <placeholder placeholderIdentifier="IBFirstResponder" id="dkx-z0-nzr" sceneMemberID="firstResponder"/>

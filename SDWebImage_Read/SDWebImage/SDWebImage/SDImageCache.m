@@ -62,7 +62,7 @@ BOOL ImageDataHasPNGPreffix(NSData *data) {
 
     return NO;
 }
-
+// 占用内存大小
 FOUNDATION_STATIC_INLINE NSUInteger SDCacheCostForImage(UIImage *image) {
     return image.size.height * image.size.width * image.scale * image.scale;
 }
@@ -71,9 +71,9 @@ FOUNDATION_STATIC_INLINE NSUInteger SDCacheCostForImage(UIImage *image) {
 
 // NSCache类似于NSMutableDictionary
 @property (strong, nonatomic) NSCache *memCache;
-
 @property (strong, nonatomic) NSString *diskCachePath;
 @property (strong, nonatomic) NSMutableArray *customPaths;
+// 串行队列
 @property (SDDispatchQueueSetterSementics, nonatomic) dispatch_queue_t ioQueue;
 
 @end
@@ -82,7 +82,7 @@ FOUNDATION_STATIC_INLINE NSUInteger SDCacheCostForImage(UIImage *image) {
 @implementation SDImageCache {
     NSFileManager *_fileManager;
 }
-
+// 缓存类单例
 + (SDImageCache *)sharedImageCache {
     static dispatch_once_t once;
     static id instance;
@@ -97,6 +97,7 @@ FOUNDATION_STATIC_INLINE NSUInteger SDCacheCostForImage(UIImage *image) {
 }
 
 - (id)initWithNamespace:(NSString *)ns {
+    // 硬盘缓存路径
     NSString *path = [self makeDiskCachePath:ns];
     return [self initWithNamespace:ns diskCacheDirectory:path];
 }
@@ -218,7 +219,7 @@ FOUNDATION_STATIC_INLINE NSUInteger SDCacheCostForImage(UIImage *image) {
 #pragma mark ImageCache
 
 // Init the disk cache
-// 初始化硬盘缓存
+// 硬盘缓存路径
 -(NSString *)makeDiskCachePath:(NSString*)fullNamespace{
     
     NSArray *paths = NSSearchPathForDirectoriesInDomains(NSCachesDirectory, NSUserDomainMask, YES);
@@ -433,48 +434,58 @@ FOUNDATION_STATIC_INLINE NSUInteger SDCacheCostForImage(UIImage *image) {
     }
 
     // First check the in-memory cache...
-    // 先检查内存缓存 如果这个key有image 就使用内存中的image进行回调 返回空的Operatin
+    // 先检查内存缓存,内存缓存命中则返回nil
     UIImage *image = [self imageFromMemoryCacheForKey:key];
     if (image) {
         doneBlock(image, SDImageCacheTypeMemory);
         return nil;
     }
+    
+    /***************** 来到这,说明内存缓存没有命中 ********************/
+    
     // 创建NSOperation（抽象类）
     NSOperation *operation = [NSOperation new];
+    
     // 串行队列 异步任务 会开启条子线程
     dispatch_async(self.ioQueue, ^{
-//        如果operation取消 就返回
         if (operation.isCancelled) {
             return;
         }
-
+        // 为什么要加@autoreleasepool?需要释放什么?
         @autoreleasepool {
-            // 通过key获取磁盘中的image
-            // 需要仔细看 diskImageForKey:方法
+            
             UIImage *diskImage = [self diskImageForKey:key];
             
+            // 硬盘中缓存命中并且需要缓存到内存中
             if (diskImage && self.shouldCacheImagesInMemory) {
-                // 将从磁盘中读取的image 添加到内存中
-                // 使用NSCache缓存image
                 NSUInteger cost = SDCacheCostForImage(diskImage);
-                /***
-                 Sets the value of the specified key in the cache, and associates the key-value pair with the specified cost.
-                 
-                 The cost value is used to compute a sum encompassing the costs of all the objects in the cache. When memory is limited or when the total cost of the cache eclipses the maximum allowed toxtal cost, the cache could begin an eviction process to remove some of its elements. However, this eviction process is not in a guaranteed order. As a consequence, if you try to manipulate the cost values to achieve some specific behavior, the consequences could be detrimental to your program. Typically, the obvious cost is the size of the value in bytes. If that information is not readily available, you should not go through the trouble of trying to compute it, as doing so will drive up the cost of using the cache. Pass in 0 for the cost value if you otherwise have nothing useful to pass, or simply use the setObject:forKey: method, which does not require a cost value to be passed in.
-                 
-                 Unlike an NSMutableDictionary object, a cache does not copy the key objects that are put into it.
-                 */
                 [self.memCache setObject:diskImage forKey:key cost:cost];
             }
-            // 主队列回调
+            
             dispatch_async(dispatch_get_main_queue(), ^{
-                // 磁盘缓存类型
+                // diskImage可能为nil
                 doneBlock(diskImage, SDImageCacheTypeDisk);
             });
         }
     });
-
+    // 返回创建的operation
     return operation;
+    
+    /***
+     这个方法主要做了什么？
+        1.通过key从缓存中查询image,并进行回调
+        2.返回创建的operation
+     
+     方法说明
+     - (void)setObject:(ObjectType)obj forKey:(KeyType)key cost:(NSUInteger)g;
+     
+     Sets the value of the specified key in the cache, and associates the key-value pair with the specified cost.
+     
+     The cost value is used to compute a sum encompassing the costs of all the objects in the cache. When memory is limited or when the total cost of the cache eclipses the maximum allowed toxtal cost, the cache could begin an eviction(收回) process to remove some of its elements. However, this eviction process is not in a guaranteed order. As a consequence, if you try to manipulate(篡改) the cost values to achieve some specific behavior, the consequences could be detrimental(有害) to your program. Typically, the obvious cost is the size of the value in bytes. If that information is not readily available, you should not go through the trouble of trying to compute it, as doing so will drive up the cost of using the cache. Pass in 0 for the cost value if you otherwise have nothing useful to pass, or simply use the setObject:forKey: method, which does not require a cost value to be passed in.
+     
+     Unlike an NSMutableDictionary object, a cache does not copy the key objects that are put into it.
+     */
+
 }
 
 - (void)removeImageForKey:(NSString *)key {

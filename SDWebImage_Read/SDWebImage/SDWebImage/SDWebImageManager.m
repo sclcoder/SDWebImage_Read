@@ -147,7 +147,6 @@
     }
 
     // 创建SDWebImageCombinedOperation对象
-    // __block是为了在block内部可以修改operation的值
     __block SDWebImageCombinedOperation *operation = [SDWebImageCombinedOperation new];
     __weak SDWebImageCombinedOperation *weakOperation = operation;
 
@@ -166,7 +165,7 @@
     }
     // 无效的url
     if (url.absoluteString.length == 0 || (!(options & SDWebImageRetryFailed) && isFailedUrl)) {
-        // 错误信息回调
+        // dispatch_main_sync_safe这个宏: 如果是主线程就直接在主线程调用block,否则回到主线程回调
         dispatch_main_sync_safe(^{
             NSError *error = [NSError errorWithDomain:NSURLErrorDomain code:NSURLErrorFileDoesNotExist userInfo:nil];
             completedBlock(nil, error, SDImageCacheTypeNone, YES, url);
@@ -184,26 +183,34 @@
     NSString *key = [self cacheKeyForURL:url];
     
     /**
-        NSOperation是OC中多线程技术的一种,是对GCD的OC包装.它包含队列(NSOperationQueue)和操作(NSOperation)两个基本要素.
+     queryDiskCacheForKey:done:
+        1.通过key从缓存中查询image,并进行回调
+        2.返回创建的operation
      
+     cacheOperation是NSOperation类型
      */
-    
-    // cacheOperation是NSOperation类型
     operation.cacheOperation = [self.imageCache queryDiskCacheForKey:key done:^(UIImage *image, SDImageCacheType cacheType) {
-        
+        // 如果已经取消
         if (operation.isCancelled) {
-            // 如果已经取消 就将SDWebImageCombinedOperation移除数组 并且退出该方法
+            // 移除并且退出
             @synchronized (self.runningOperations) {
                 [self.runningOperations removeObject:operation];
             }
             return;
         }
 
+        // 条件 1.缓存没命中或需要刷新缓存 2.没有实现代理方法或实现的代理方法返回true
+        // 一般情况就是缓存没命中就进来
         if ((!image || options & SDWebImageRefreshCached) && (![self.delegate respondsToSelector:@selector(imageManager:shouldDownloadImageForURL:)] || [self.delegate imageManager:self shouldDownloadImageForURL:url])) {
+            
+            // 缓存命中但是需要刷新缓存
             if (image && options & SDWebImageRefreshCached) {
+                
                 dispatch_main_sync_safe(^{
                     // If image was found in the cache but SDWebImageRefreshCached is provided, notify about the cached image
                     // AND try to re-download it in order to let a chance to NSURLCache to refresh it from server.
+                    
+                    // 到此为止 还没看到重新下载的代码？？？
                     completedBlock(image, nil, cacheType, YES, url);
                 });
             }
@@ -211,19 +218,29 @@
             // download if no image or requested to refresh anyway, and download allowed by delegate
             SDWebImageDownloaderOptions downloaderOptions = 0;
             if (options & SDWebImageLowPriority) downloaderOptions |= SDWebImageDownloaderLowPriority;
+            
             if (options & SDWebImageProgressiveDownload) downloaderOptions |= SDWebImageDownloaderProgressiveDownload;
+            
             if (options & SDWebImageRefreshCached) downloaderOptions |= SDWebImageDownloaderUseNSURLCache;
+            
             if (options & SDWebImageContinueInBackground) downloaderOptions |= SDWebImageDownloaderContinueInBackground;
+            
             if (options & SDWebImageHandleCookies) downloaderOptions |= SDWebImageDownloaderHandleCookies;
+            
             if (options & SDWebImageAllowInvalidSSLCertificates) downloaderOptions |= SDWebImageDownloaderAllowInvalidSSLCertificates;
+            
             if (options & SDWebImageHighPriority) downloaderOptions |= SDWebImageDownloaderHighPriority;
+            
             if (image && options & SDWebImageRefreshCached) {
                 // force progressive off if image already cached but forced refreshing
                 downloaderOptions &= ~SDWebImageDownloaderProgressiveDownload;
                 // ignore image read from NSURLCache if image if cached but force refreshing
                 downloaderOptions |= SDWebImageDownloaderIgnoreCachedResponse;
             }
+            
+            // 下载
             id <SDWebImageOperation> subOperation = [self.imageDownloader downloadImageWithURL:url options:downloaderOptions progress:progressBlock completed:^(UIImage *downloadedImage, NSData *data, NSError *error, BOOL finished) {
+                
                 __strong __typeof(weakOperation) strongOperation = weakOperation;
                 if (!strongOperation || strongOperation.isCancelled) {
                     // Do nothing if the operation was cancelled

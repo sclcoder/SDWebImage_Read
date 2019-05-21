@@ -76,7 +76,6 @@ static char TAG_ACTIVITY_SHOW;
             // self被释放的场景??
             if (!wself) return;
             
-            // 主线程同步任务
             dispatch_main_sync_safe(^{
                 
                 if (!wself) return;
@@ -89,10 +88,12 @@ static char TAG_ACTIVITY_SHOW;
                     return;
                 }
                 else if (image) {
-                    // 图片下载完自动设置image
+                    NSLog(@"自动设置图片");
+                    // 自动设置image
                     wself.image = image;
                     [wself setNeedsLayout];
                 } else {
+                    NSLog(@"下载图片失败后设置占位图");
                     // 下载图片失败后设置占位图
                     if ((options & SDWebImageDelayPlaceholder)) {
                         wself.image = placeholder;

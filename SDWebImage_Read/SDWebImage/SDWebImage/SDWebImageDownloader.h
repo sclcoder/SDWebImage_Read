@@ -11,13 +11,16 @@
 #import "SDWebImageOperation.h"
 
 typedef NS_OPTIONS(NSUInteger, SDWebImageDownloaderOptions) {
+    // 下载 低优先级
     SDWebImageDownloaderLowPriority = 1 << 0,
+    // 进度下载
     SDWebImageDownloaderProgressiveDownload = 1 << 1,
 
     /**
      * By default, request prevent the use of NSURLCache. With this flag, NSURLCache
      * is used with default policies.
      */
+    // 使用NSURLCache
     SDWebImageDownloaderUseNSURLCache = 1 << 2,
 
     /**
@@ -55,12 +58,12 @@ typedef NS_ENUM(NSInteger, SDWebImageDownloaderExecutionOrder) {
     /**
      * Default value. All download operations will execute in queue style (first-in-first-out).
      */
-    SDWebImageDownloaderFIFOExecutionOrder,
+    SDWebImageDownloaderFIFOExecutionOrder, // 队列模式
 
     /**
      * All download operations will execute in stack style (last-in-first-out).
      */
-    SDWebImageDownloaderLIFOExecutionOrder
+    SDWebImageDownloaderLIFOExecutionOrder // 栈模式
 };
 
 extern NSString *const SDWebImageDownloadStartNotification;
@@ -78,29 +81,29 @@ typedef NSDictionary *(^SDWebImageDownloaderHeadersFilterBlock)(NSURL *url, NSDi
 @interface SDWebImageDownloader : NSObject
 
 /**
- * Decompressing images that are downloaded and cached can improve performance but can consume lot of memory.
- * Defaults to YES. Set this to NO if you are experiencing a crash due to excessive memory consumption.
+ * Decompressing(解压缩) images that are downloaded and cached can improve performance but can consume lot of memory.
+ * Defaults to YES. Set this to NO if you are experiencing a crash due to excessive memory consumption(消耗).
  */
-@property (assign, nonatomic) BOOL shouldDecompressImages;
+@property (assign, nonatomic) BOOL shouldDecompressImages; // 是否解压
 
-@property (assign, nonatomic) NSInteger maxConcurrentDownloads;
+@property (assign, nonatomic) NSInteger maxConcurrentDownloads; // 下载的最大并发数
 
 /**
  * Shows the current amount of downloads that still need to be downloaded
  */
-@property (readonly, nonatomic) NSUInteger currentDownloadCount;
+@property (readonly, nonatomic) NSUInteger currentDownloadCount; // 当前下载数
 
 
 /**
  *  The timeout value (in seconds) for the download operation. Default: 15.0.
  */
-@property (assign, nonatomic) NSTimeInterval downloadTimeout;
+@property (assign, nonatomic) NSTimeInterval downloadTimeout; // 超时时间 默认15s
 
 
 /**
  * Changes download operations execution order. Default value is `SDWebImageDownloaderFIFOExecutionOrder`.
  */
-@property (assign, nonatomic) SDWebImageDownloaderExecutionOrder executionOrder;
+@property (assign, nonatomic) SDWebImageDownloaderExecutionOrder executionOrder; // 下载顺序 栈or队列模式
 
 /**
  *  Singleton method, returns the shared instance
@@ -112,7 +115,7 @@ typedef NSDictionary *(^SDWebImageDownloaderHeadersFilterBlock)(NSURL *url, NSDi
 /**
  *  Set the default URL credential to be set for request operations.
  */
-@property (strong, nonatomic) NSURLCredential *urlCredential;
+@property (strong, nonatomic) NSURLCredential *urlCredential; // 证书相关
 
 /**
  * Set username
@@ -130,6 +133,7 @@ typedef NSDictionary *(^SDWebImageDownloaderHeadersFilterBlock)(NSURL *url, NSDi
  * This block will be invoked for each downloading image request, returned
  * NSDictionary will be used as headers in corresponding HTTP request.
  */
+// 设置HTTP请求头回调
 @property (nonatomic, copy) SDWebImageDownloaderHeadersFilterBlock headersFilter;
 
 /**
