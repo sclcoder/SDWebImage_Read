@@ -94,14 +94,30 @@ static NSString *const kCompletedCallbackKey = @"completed";
         NSURLSessionConfiguration *sessionConfig = [NSURLSessionConfiguration defaultSessionConfiguration];
         sessionConfig.timeoutIntervalForRequest = _downloadTimeout;
 
-        /**
-         *  Create the session for this task
-         *  We send nil as delegate queue so that the session creates a serial operation queue for performing all delegate
-         *  method calls and completion handler calls.
-         */
+        // 设置session的代理为self
         self.session = [NSURLSession sessionWithConfiguration:sessionConfig
                                                      delegate:self
                                                 delegateQueue:nil];
+        /**
+         Summary
+         
+         Creates a session with the specified session configuration, delegate, and operation queue.
+         Declaration
+         
+         + (NSURLSession *)sessionWithConfiguration:(NSURLSessionConfiguration *)configuration delegate:(id<NSURLSessionDelegate>)delegate delegateQueue:(NSOperationQueue *)queue;
+         Parameters
+         
+         configuration
+         A configuration object that specifies certain behaviors, such as caching policies, timeouts, proxies, pipelining, TLS versions to support, cookie policies, and credential storage.
+         See NSURLSessionConfiguration for more information.
+         delegate
+         A session delegate object that handles requests for authentication and other session-related events.
+         This delegate object is responsible for handling authentication challenges, for making caching decisions, and for handling other session-related events. If nil, the class should be used only with methods that take completion handlers.
+         Important
+         The session object keeps a strong reference to the delegate until your app exits or explicitly invalidates the session. If you do not invalidate the session by calling the invalidateAndCancel or finishTasksAndInvalidate method, your app leaks memory until it exits.
+         queue
+         An operation queue for scheduling the delegate calls and completion handlers. The queue should be a serial queue, in order to ensure the correct ordering of callbacks. If nil, the session creates a serial operation queue for performing all delegate method calls and completion handler calls.
+         */
     }
     return self;
 }
@@ -242,25 +258,37 @@ static NSString *const kCompletedCallbackKey = @"completed";
                         }
                      ];
         
+        // 是否解压图片
         operation.shouldDecompressImages = wself.shouldDecompressImages;
         
+        // 验证证书相关
         if (wself.urlCredential) {
             operation.credential = wself.urlCredential;
         } else if (wself.username && wself.password) {
             operation.credential = [NSURLCredential credentialWithUser:wself.username password:wself.password persistence:NSURLCredentialPersistenceForSession];
         }
         
+        // 下载优先级
         if (options & SDWebImageDownloaderHighPriority) {
             operation.queuePriority = NSOperationQueuePriorityHigh;
         } else if (options & SDWebImageDownloaderLowPriority) {
             operation.queuePriority = NSOperationQueuePriorityLow;
         }
 
+        // 将operation添加到NSOperationQueue即开始执行任务了
         [wself.downloadQueue addOperation:operation];
+        
         if (wself.executionOrder == SDWebImageDownloaderLIFOExecutionOrder) {
             // Emulate LIFO execution order by systematically adding new operations as last operation's dependency
+            // 如果是LIFO模式 那么让先operation依赖后加入operation 以达到后进先出(LIFO)的效果
             [wself.lastAddedOperation addDependency:operation];
+            // 记录上一个operation
             wself.lastAddedOperation = operation;
+            
+            /**
+             addDependency方法说明:
+             The receiver is not considered ready to execute until all of its dependent operations have finished executing. If the receiver is already executing its task, adding dependencies has no practical effect. This method may change the isReady and dependencies properties of the receiver.
+             */
         }
     }];
 
@@ -347,6 +375,7 @@ static NSString *const kCompletedCallbackKey = @"completed";
 #pragma mark Helper methods
 
 - (SDWebImageDownloaderOperation *)operationWithTask:(NSURLSessionTask *)task {
+    
     SDWebImageDownloaderOperation *returnOperation = nil;
     for (SDWebImageDownloaderOperation *operation in self.downloadQueue.operations) {
         if (operation.dataTask.taskIdentifier == task.taskIdentifier) {
@@ -359,6 +388,8 @@ static NSString *const kCompletedCallbackKey = @"completed";
 
 #pragma mark NSURLSessionDataDelegate
 
+// 回调方法都转发给了dataOperation
+
 - (void)URLSession:(NSURLSession *)session
           dataTask:(NSURLSessionDataTask *)dataTask
 didReceiveResponse:(NSURLResponse *)response
@@ -366,7 +397,6 @@ didReceiveResponse:(NSURLResponse *)response
 
     // Identify the operation that runs this task and pass it the delegate method
     SDWebImageDownloaderOperation *dataOperation = [self operationWithTask:dataTask];
-
     [dataOperation URLSession:session dataTask:dataTask didReceiveResponse:response completionHandler:completionHandler];
 }
 

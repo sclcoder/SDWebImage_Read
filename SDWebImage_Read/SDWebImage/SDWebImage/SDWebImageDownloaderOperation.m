@@ -27,7 +27,7 @@ NSString *const SDWebImageDownloadFinishNotification = @"SDWebImageDownloadFinis
 @property (assign, nonatomic, getter = isFinished) BOOL finished;
 @property (strong, nonatomic) NSMutableData *imageData;
 
-// This is weak because it is injected by whoever manages this session. If this gets nil-ed out, we won't be able to run
+// This is weak because it is injected(注入) by whoever manages this session. If this gets nil-ed out, we won't be able to run
 // the task associated with this operation
 @property (weak, nonatomic) NSURLSession *unownedSession;
 // This is set if we're using not using an injected NSURLSession. We're responsible of invalidating this one
@@ -52,6 +52,7 @@ NSString *const SDWebImageDownloadFinishNotification = @"SDWebImageDownloadFinis
 @synthesize executing = _executing;
 @synthesize finished = _finished;
 
+// 废弃了
 - (id)initWithRequest:(NSURLRequest *)request
               options:(SDWebImageDownloaderOptions)options
              progress:(SDWebImageDownloaderProgressBlock)progressBlock
@@ -82,13 +83,36 @@ NSString *const SDWebImageDownloadFinishNotification = @"SDWebImageDownloadFinis
         _executing = NO;
         _finished = NO;
         _expectedSize = 0;
-        _unownedSession = session;
+        _unownedSession = session; // 使用session初始化_unownedSession
         responseFromCached = YES; // Initially wrong until `- URLSession:dataTask:willCacheResponse:completionHandler: is called or not called
     }
     return self;
 }
 
+
+
+/**
+ Summary
+ 
+ Begins the execution of the operation.
+ Declaration
+ 
+ - (void)start;
+ Discussion
+ 
+ The default implementation of this method updates the execution state of the operation and calls the receiver’s main method. This method also performs several checks to ensure that the operation can actually run. For example, if the receiver was cancelled or is already finished, this method simply returns without calling main. (In OS X v10.5, this method throws an exception if the operation is already finished.) If the operation is currently executing or is not ready to execute, this method throws an NSInvalidArgumentException exception. In OS X v10.5, this method catches and ignores any exceptions thrown by your main method automatically. In macOS 10.6 and later, exceptions are allowed to propagate(传播) beyond this method. You should never allow exceptions to propagate out of your main method.
+ Note
+ An operation is not considered ready to execute if it is still dependent on other operations that have not yet finished.
+ 并发operation必须重写该方法
+ If you are implementing a concurrent operation, you must override this method and use it to initiate your operation. Your custom implementation must not call super at any time. In addition to configuring the execution environment for your task, your implementation of this method must also track the state of the operation and provide appropriate state transitions. When the operation executes and subsequently(随后) finishes its work, it should generate KVO notifications for the isExecuting and isFinished key paths respectively. For more information about manually generating KVO notifications, see Key-Value Observing Programming Guide.
+ You can call this method explicitly if you want to execute your operations manually. However, it is a programmer error to call this method on an operation object that is already in an operation queue or to queue the operation after calling this method. Once you add an operation object to a queue, the queue assumes all responsibility for it.
+ 
+ */
+
+// 自定义operation需要重写start方法 初始化operation
 - (void)start {
+    
+    /**************** 加锁 ******************/
     @synchronized (self) {
         if (self.isCancelled) {
             self.finished = YES;
@@ -96,6 +120,7 @@ NSString *const SDWebImageDownloadFinishNotification = @"SDWebImageDownloadFinis
             return;
         }
 
+        // 后台任务相关
 #if TARGET_OS_IPHONE && __IPHONE_OS_VERSION_MAX_ALLOWED >= __IPHONE_4_0
         Class UIApplicationClass = NSClassFromString(@"UIApplication");
         BOOL hasApplication = UIApplicationClass && [UIApplicationClass respondsToSelector:@selector(sharedApplication)];
@@ -134,7 +159,9 @@ NSString *const SDWebImageDownloadFinishNotification = @"SDWebImageDownloadFinis
         self.executing = YES;
         self.thread = [NSThread currentThread];
     }
+    /**************** 加锁 ******************/
     
+    // 开始下载
     [self.dataTask resume];
 
     if (self.dataTask) {
@@ -201,6 +228,7 @@ NSString *const SDWebImageDownloadFinishNotification = @"SDWebImageDownloadFinis
 }
 
 - (void)done {
+    // 会触发KVO
     self.finished = YES;
     self.executing = NO;
     [self reset];
@@ -219,6 +247,8 @@ NSString *const SDWebImageDownloadFinishNotification = @"SDWebImageDownloadFinis
     }
 }
 
+// When the operation executes and subsequently(随后) finishes its work, it should generate KVO notifications for the isExecuting and isFinished key paths respectively.
+// 结束时必须产生KVO的通知
 - (void)setFinished:(BOOL)finished {
     [self willChangeValueForKey:@"isFinished"];
     _finished = finished;

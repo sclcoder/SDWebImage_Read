@@ -15,6 +15,7 @@ extern NSString *const SDWebImageDownloadReceiveResponseNotification;
 extern NSString *const SDWebImageDownloadStopNotification;
 extern NSString *const SDWebImageDownloadFinishNotification;
 
+// 自定义NSOperation
 @interface SDWebImageDownloaderOperation : NSOperation <SDWebImageOperation, NSURLSessionTaskDelegate, NSURLSessionDataDelegate>
 
 /**
