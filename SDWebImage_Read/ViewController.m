@@ -38,14 +38,14 @@
     [_imageView setBackgroundColor:[UIColor redColor]];
     [_imageView sd_setImageWithURL:url placeholderImage:[UIImage imageNamed:@"sunchunlei.png"] options:SDWebImageRefreshCached];
     
-    [_imageView2 setShowActivityIndicatorView:YES];
-    [_imageView2 setBackgroundColor:[UIColor redColor]];
-    [_imageView2 sd_setImageWithURL:url placeholderImage:[UIImage imageNamed:@"sunchunlei.png"] options:SDWebImageRefreshCached progress:^(NSInteger receivedSize, NSInteger expectedSize) {
-        NSLog(@"receivedSize:%d,expectedSize:%d",receivedSize,expectedSize);
-
-    } completed:^(UIImage *image, NSError *error, SDImageCacheType cacheType, NSURL *imageURL) {
-        NSLog(@"%@--%@",error,imageURL);
-
-    }];
+//    [_imageView2 setShowActivityIndicatorView:YES];
+//    [_imageView2 setBackgroundColor:[UIColor redColor]];
+//    [_imageView2 sd_setImageWithURL:url placeholderImage:[UIImage imageNamed:@"sunchunlei.png"] options:0 progress:^(NSInteger receivedSize, NSInteger expectedSize) {
+//        NSLog(@"receivedSize:%d,expectedSize:%d",receivedSize,expectedSize);
+//
+//    } completed:^(UIImage *image, NSError *error, SDImageCacheType cacheType, NSURL *imageURL) {
+//        NSLog(@"%@--%@",error,imageURL);
+//
+//    }];
 }
 @end

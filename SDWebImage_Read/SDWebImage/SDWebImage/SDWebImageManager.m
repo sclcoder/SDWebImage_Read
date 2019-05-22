@@ -74,12 +74,11 @@
         return [url absoluteString];
     }
 }
-// MARK:TODO:查看缓存类
+
+// 检查是否有缓存 1.内存缓存 2.硬盘缓存
 - (BOOL)cachedImageExistsForURL:(NSURL *)url {
     NSString *key = [self cacheKeyForURL:url];
-    // 优先检查内存
     if ([self.imageCache imageFromMemoryCacheForKey:key] != nil) return YES;
-    // 内存中不存在,再检查硬盘中是否存在
     return [self.imageCache diskImageExistsWithKey:key];
 }
 
@@ -125,11 +124,13 @@
     }];
 }
 
-// 下载
+// 对外下载方法
 - (id <SDWebImageOperation>)downloadImageWithURL:(NSURL *)url
                                          options:(SDWebImageOptions)options
                                         progress:(SDWebImageDownloaderProgressBlock)progressBlock
                                        completed:(SDWebImageCompletionWithFinishedBlock)completedBlock {
+    
+    
     // Invoking this method without a completedBlock is pointless(无意义的)
     // 预加载可以使用SDWebImagePrefetcher这个类实现
     NSAssert(completedBlock != nil, @"If you mean to prefetch the image, use -[SDWebImagePrefetcher prefetchURLs] instead");
@@ -179,28 +180,31 @@
         // 将operation加入到runningOperations数组中 注意这里加载的是operation而不是weakOperation
         [self.runningOperations addObject:operation];
     }
+    
+    
     // 生成缓存key
     NSString *key = [self cacheKeyForURL:url];
+    
     
     /**
      queryDiskCacheForKey:done:
         1.通过key从缓存中查询image,并进行回调
-        2.返回创建的operation
-     
-     cacheOperation是NSOperation类型
-     */
+        2.返回创建的cacheOperation（NSOperation类型）如果是内存缓存则cacheOperation=nil
+    */
     operation.cacheOperation = [self.imageCache queryDiskCacheForKey:key done:^(UIImage *image, SDImageCacheType cacheType) {
-        // 如果已经取消
+        
+        // 因为queryDiskCacheForKey方法中done的回调是异步任务回调时operation可能已经取消
         if (operation.isCancelled) {
-            // 移除并且退出
+            // 移除并且退出  ---竟然用@synchronized效率这么低的家伙加锁
             @synchronized (self.runningOperations) {
                 [self.runningOperations removeObject:operation];
             }
             return;
         }
-
-        // 条件 1.缓存没命中或需要刷新缓存 2.没有实现代理方法或实现的代理方法返回true
-        // 一般情况就是缓存没命中就进来
+/*********
+          情景一
+          1.缓存没命中或需要刷新缓存 2.shouldDownloadImageForURL
+ ********/
         if ((!image || options & SDWebImageRefreshCached) && (![self.delegate respondsToSelector:@selector(imageManager:shouldDownloadImageForURL:)] || [self.delegate imageManager:self shouldDownloadImageForURL:url])) {
             
             // 缓存命中但是需要刷新缓存
@@ -210,13 +214,15 @@
                     // If image was found in the cache but SDWebImageRefreshCached is provided, notify about the cached image
                     // AND try to re-download it in order to let a chance to NSURLCache to refresh it from server.
                     
-                    // 到此为止 还没看到重新下载的代码？？？
+                    // 将命中的缓存图片回调 刷新NSURLCache操作在下面的下载过程中
                     completedBlock(image, nil, cacheType, YES, url);
                 });
             }
-
+            
+            
             // download if no image or requested to refresh anyway, and download allowed by delegate
             SDWebImageDownloaderOptions downloaderOptions = 0;
+            // 设置下载的选项
             if (options & SDWebImageLowPriority) downloaderOptions |= SDWebImageDownloaderLowPriority;
             
             if (options & SDWebImageProgressiveDownload) downloaderOptions |= SDWebImageDownloaderProgressiveDownload;
@@ -238,7 +244,7 @@
                 downloaderOptions |= SDWebImageDownloaderIgnoreCachedResponse;
             }
             
-            // 下载
+/********* imageDownloader下载方法开始 ***************/
             id <SDWebImageOperation> subOperation = [self.imageDownloader downloadImageWithURL:url options:downloaderOptions progress:progressBlock completed:^(UIImage *downloadedImage, NSData *data, NSError *error, BOOL finished) {
                 
                 __strong __typeof(weakOperation) strongOperation = weakOperation;
@@ -247,13 +253,15 @@
                     // See #699 for more details
                     // if we would call the completedBlock, there could be a race condition between this block and another completedBlock for the same object, so if this one is called second, we will overwrite the new data
                 }
-                else if (error) {
+                else if (error) { // 出错了
+                    // 完成回调
                     dispatch_main_sync_safe(^{
                         if (strongOperation && !strongOperation.isCancelled) {
                             completedBlock(nil, error, SDImageCacheTypeNone, finished, url);
                         }
                     });
-
+                    
+                    // 不是这些错误 将这个url加入黑名单
                     if (   error.code != NSURLErrorNotConnectedToInternet
                         && error.code != NSURLErrorCancelled
                         && error.code != NSURLErrorTimedOut
@@ -266,7 +274,9 @@
                         }
                     }
                 }
-                else {
+                else {  // 没有出错
+                    
+                    // SDWebImageRetryFailed将这个url移除黑名单
                     if ((options & SDWebImageRetryFailed)) {
                         @synchronized (self.failedURLs) {
                             [self.failedURLs removeObject:url];
@@ -274,12 +284,18 @@
                     }
                     
                     BOOL cacheOnDisk = !(options & SDWebImageCacheMemoryOnly);
-
+                    
+                    // 注意: image缓存的图片 downloadedImage下载的图片
+                    
                     if (options & SDWebImageRefreshCached && image && !downloadedImage) {
                         // Image refresh hit the NSURLCache cache, do not call the completion block
+                        // 这个操作什么也没做,仅仅为了条件判断
+                        // 来到这里说明 有缓存图片但是需要重新下载且下载的downloadedImage不存在
                     }
                     else if (downloadedImage && (!downloadedImage.images || (options & SDWebImageTransformAnimatedImage)) && [self.delegate respondsToSelector:@selector(imageManager:transformDownloadedImage:withURL:)]) {
+                        
                         dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_HIGH, 0), ^{
+                            
                             UIImage *transformedImage = [self.delegate imageManager:self transformDownloadedImage:downloadedImage withURL:url];
 
                             if (transformedImage && finished) {
@@ -296,6 +312,8 @@
                     }
                     else {
                         if (downloadedImage && finished) {
+                            // 缓存到SDImageCache
+                            // 缓存的核心方法
                             [self.imageCache storeImage:downloadedImage recalculateFromImage:NO imageData:data forKey:key toDisk:cacheOnDisk];
                         }
 
@@ -307,6 +325,7 @@
                     }
                 }
 
+                // 完成-移除operation
                 if (finished) {
                     @synchronized (self.runningOperations) {
                         if (strongOperation) {
@@ -315,7 +334,12 @@
                     }
                 }
             }];
+/********* imageDownloader下载方法结束 ***************/
+
+            
+            // 设置operation的取消回调
             operation.cancelBlock = ^{
+                // 如果operation取消 那么需要取消其内部的subOperation(一个下载的operation)
                 [subOperation cancel];
                 
                 @synchronized (self.runningOperations) {
@@ -326,7 +350,13 @@
                 }
             };
         }
-        else if (image) {
+        
+        /*********
+         情景二
+         缓存命中了
+         ********/
+        else if (image) { //
+            // 使用命中的image回调 删除operation的引用
             dispatch_main_sync_safe(^{
                 __strong __typeof(weakOperation) strongOperation = weakOperation;
                 if (strongOperation && !strongOperation.isCancelled) {
@@ -337,6 +367,11 @@
                 [self.runningOperations removeObject:operation];
             }
         }
+        
+        /*********
+         情景三
+         缓存没有命中且代理方法不允许下载
+         ********/
         else {
             // Image not in cache and download disallowed by delegate
             dispatch_main_sync_safe(^{

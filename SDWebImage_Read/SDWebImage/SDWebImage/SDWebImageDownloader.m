@@ -303,9 +303,12 @@ static NSString *const kCompletedCallbackKey = @"completed";
         } else if (options & SDWebImageDownloaderLowPriority) {
             operation.queuePriority = NSOperationQueuePriorityLow;
         }
+        
 
         // 将operation添加到NSOperationQueue即开始执行任务了
         [wself.downloadQueue addOperation:operation];
+        
+        
         
         if (wself.executionOrder == SDWebImageDownloaderLIFOExecutionOrder) {
             // Emulate LIFO execution order by systematically adding new operations as last operation's dependency

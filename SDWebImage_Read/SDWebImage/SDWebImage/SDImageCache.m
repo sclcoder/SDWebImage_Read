@@ -201,7 +201,8 @@ FOUNDATION_STATIC_INLINE NSUInteger SDCacheCostForImage(UIImage *image) {
 }
 
 #pragma mark SDImageCache (private)
-// MD5编码后的文件名字
+
+// key经过MD5编码后的生成文件名字
 - (NSString *)cachedFileNameForKey:(NSString *)key {
     const char *str = [key UTF8String];
     if (str == NULL) {
@@ -214,6 +215,11 @@ FOUNDATION_STATIC_INLINE NSUInteger SDCacheCostForImage(UIImage *image) {
                           r[11], r[12], r[13], r[14], r[15], [[key pathExtension] isEqualToString:@""] ? @"" : [NSString stringWithFormat:@".%@", [key pathExtension]]];
 
     return filename;
+    
+    /**
+     key       http://pic40.nipic.com/20140412/18428321_144447597175_2.jpg
+     filename  488c2b79320fda64e077374f56b0f970.jpg
+     */
 }
 
 #pragma mark ImageCache
@@ -372,8 +378,9 @@ FOUNDATION_STATIC_INLINE NSUInteger SDCacheCostForImage(UIImage *image) {
         return data;
     }
     
-    /// 待看???
 
+    /********* 一下处理都是应急措施 **********/
+    
     // fallback because of https://github.com/rs/SDWebImage/pull/976 that added the extension to the disk file name
     // checking the key with and without the extension
     data = [NSData dataWithContentsOfFile:[defaultPath stringByDeletingPathExtension]];
@@ -406,9 +413,8 @@ FOUNDATION_STATIC_INLINE NSUInteger SDCacheCostForImage(UIImage *image) {
     if (data) {
         // data转成image
         UIImage *image = [UIImage sd_imageWithData:data];
-        
         image = [self scaledImageForKey:key image:image];
-        if (self.shouldDecompressImages) {
+        if (self.shouldDecompressImages) { // 解压
             image = [UIImage decodedImageWithImage:image];
         }
         return image;
@@ -422,6 +428,7 @@ FOUNDATION_STATIC_INLINE NSUInteger SDCacheCostForImage(UIImage *image) {
     return SDScaledImageForKey(key, image);
 }
 
+// 从硬盘查找缓存
 - (NSOperation *)queryDiskCacheForKey:(NSString *)key done:(SDWebImageQueryCompletedBlock)doneBlock {
     // 没有block返回nil
     if (!doneBlock) {
@@ -446,16 +453,17 @@ FOUNDATION_STATIC_INLINE NSUInteger SDCacheCostForImage(UIImage *image) {
     // 创建NSOperation（抽象类）
     NSOperation *operation = [NSOperation new];
     
-    // 串行队列 异步任务 会开启条子线程
+    // 串行队列异步任务会开启一条子线程（开启新的线程是针对当前线程而言）
     dispatch_async(self.ioQueue, ^{
+        
+        // 因为是异步任务 所以在执行时operation有可能已经被取消了
         if (operation.isCancelled) {
             return;
         }
-        // 为什么要加@autoreleasepool?需要释放什么?
+        // 为什么要加@autoreleasepool? 这个方法内部会产生image对象可能开销较大
         @autoreleasepool {
             
             UIImage *diskImage = [self diskImageForKey:key];
-            
             // 硬盘中缓存命中并且需要缓存到内存中
             if (diskImage && self.shouldCacheImagesInMemory) {
                 NSUInteger cost = SDCacheCostForImage(diskImage);

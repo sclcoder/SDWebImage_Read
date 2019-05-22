@@ -22,7 +22,7 @@
                         <autoresizingMask key="autoresizingMask" widthSizable="YES" heightSizable="YES"/>
                         <subviews>
                             <imageView userInteractionEnabled="NO" contentMode="scaleToFill" horizontalHuggingPriority="251" verticalHuggingPriority="251" translatesAutoresizingMaskIntoConstraints="NO" id="kkd-QY-E1v">
-                                <rect key="frame" x="100" y="120" width="175" height="247"/>
+                                <rect key="frame" x="0.0" y="20" width="375" height="347"/>
                             </imageView>
                             <imageView userInteractionEnabled="NO" contentMode="scaleToFill" horizontalHuggingPriority="251" verticalHuggingPriority="251" translatesAutoresizingMaskIntoConstraints="NO" id="us5-d9-kUF">
                                 <rect key="frame" x="100" y="394" width="175" height="247"/>
@@ -32,10 +32,10 @@
                         <constraints>
                             <constraint firstItem="us5-d9-kUF" firstAttribute="leading" secondItem="8bC-Xf-vdC" secondAttribute="leadingMargin" constant="84" id="Ehd-FV-P9c"/>
                             <constraint firstAttribute="trailingMargin" secondItem="us5-d9-kUF" secondAttribute="trailing" constant="84" id="J4K-BS-OgY"/>
-                            <constraint firstItem="kkd-QY-E1v" firstAttribute="leading" secondItem="8bC-Xf-vdC" secondAttribute="leading" constant="100" id="Qrb-mM-7JH"/>
-                            <constraint firstItem="kkd-QY-E1v" firstAttribute="top" secondItem="y3c-jy-aDJ" secondAttribute="bottom" constant="100" id="YjQ-HR-PII"/>
+                            <constraint firstItem="kkd-QY-E1v" firstAttribute="leading" secondItem="8bC-Xf-vdC" secondAttribute="leading" id="Qrb-mM-7JH"/>
+                            <constraint firstItem="kkd-QY-E1v" firstAttribute="top" secondItem="y3c-jy-aDJ" secondAttribute="bottom" id="YjQ-HR-PII"/>
                             <constraint firstItem="wfy-db-euE" firstAttribute="top" secondItem="kkd-QY-E1v" secondAttribute="bottom" constant="300" id="esl-b6-HdN"/>
-                            <constraint firstAttribute="trailing" secondItem="kkd-QY-E1v" secondAttribute="trailing" constant="100" id="qgI-5p-MdN"/>
+                            <constraint firstAttribute="trailing" secondItem="kkd-QY-E1v" secondAttribute="trailing" id="qgI-5p-MdN"/>
                             <constraint firstItem="wfy-db-euE" firstAttribute="top" secondItem="us5-d9-kUF" secondAttribute="bottom" constant="26" id="qs5-5W-MpV"/>
                             <constraint firstItem="us5-d9-kUF" firstAttribute="top" secondItem="kkd-QY-E1v" secondAttribute="bottom" constant="27" id="vpU-KY-DtS"/>
                         </constraints>
