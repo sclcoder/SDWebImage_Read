@@ -285,7 +285,7 @@
                     
                     BOOL cacheOnDisk = !(options & SDWebImageCacheMemoryOnly);
                     
-                    // 注意: image缓存的图片 downloadedImage下载的图片
+                    // 注意: image缓存的图片 downloadedImage下载的data转化成的UIImage
                     
                     if (options & SDWebImageRefreshCached && image && !downloadedImage) {
                         // Image refresh hit the NSURLCache cache, do not call the completion block
@@ -312,8 +312,8 @@
                     }
                     else {
                         if (downloadedImage && finished) {
-                            // 缓存到SDImageCache
                             // 缓存的核心方法
+                            // downloadedImage:从服务端下载的data经过转化生成的UIImage对象  data:服务端下载原始数据
                             [self.imageCache storeImage:downloadedImage recalculateFromImage:NO imageData:data forKey:key toDisk:cacheOnDisk];
                         }
 

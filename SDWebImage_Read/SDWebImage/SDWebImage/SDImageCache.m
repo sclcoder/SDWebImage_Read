@@ -145,19 +145,15 @@ FOUNDATION_STATIC_INLINE NSUInteger SDCacheCostForImage(UIImage *image) {
         NSString *fullNamespace = [@"com.hackemist.SDWebImageCache." stringByAppendingString:ns];
 
         // initialise PNG signature data
-        // 初始化PNG署名data
         kPNGSignatureData = [NSData dataWithBytes:kPNGSignatureBytes length:8];
 
-        // Create IO serial queue
-        // 创建一个串行队列
+        // 串行队列
         _ioQueue = dispatch_queue_create("com.hackemist.SDWebImageCache", DISPATCH_QUEUE_SERIAL);
 
         // Init default values
-        // 设置最长缓存时间 默认1周
         _maxCacheAge = kDefaultCacheMaxCacheAge;
 
         // Init the memory cache
-        // 初始化内存缓存
         _memCache = [[AutoPurgeCache alloc] init];
         _memCache.name = fullNamespace;
 
@@ -173,15 +169,12 @@ FOUNDATION_STATIC_INLINE NSUInteger SDCacheCostForImage(UIImage *image) {
         }
 
         // Set decompression to YES
-        // 设置解压为YES
         _shouldDecompressImages = YES;
 
         // memory cache enabled
-        // 使用内存缓存
         _shouldCacheImagesInMemory = YES;
 
         // Disable iCloud
-        // 禁止iCloud做备份
         _shouldDisableiCloud = YES;
         
         // 串行队列 同步任务 创建NSFileManager
@@ -268,20 +261,35 @@ FOUNDATION_STATIC_INLINE NSUInteger SDCacheCostForImage(UIImage *image) {
     return [paths[0] stringByAppendingPathComponent:fullNamespace];
 }
 
+
+/**
+ * Store an image into memory and optionally disk cache at the given key.
+ *
+ * @param image       The image to store
+ * @param recalculate BOOL indicates if imageData can be used or a new data should be constructed from the UIImage
+ * @param imageData   The image data as returned by the server, this representation will be used for disk storage
+ *                    instead of converting the given image object into a storable/compressed image format in order
+ *                    to save quality and CPU
+ * @param key         The unique image cache key, usually it's image absolute URL
+ * @param toDisk      Store the image to disk cache if YES
+ */
 - (void)storeImage:(UIImage *)image recalculateFromImage:(BOOL)recalculate imageData:(NSData *)imageData forKey:(NSString *)key toDisk:(BOOL)toDisk {
     if (!image || !key) {
         return;
     }
     // if memory cache is enabled
+    // 内存缓存 缓存的是UIImage类型的对象
     if (self.shouldCacheImagesInMemory) {
         NSUInteger cost = SDCacheCostForImage(image);
         [self.memCache setObject:image forKey:key cost:cost];
     }
-
+    
+    // 硬盘缓存 存储的是NSData类型
     if (toDisk) {
         dispatch_async(self.ioQueue, ^{
             NSData *data = imageData;
 
+            // 以下操作是将 UIImage转化为NSData
             if (image && (recalculate || !data)) {
 #if TARGET_OS_IPHONE
                 // We need to determine if the image is a PNG or a JPEG
@@ -291,6 +299,8 @@ FOUNDATION_STATIC_INLINE NSUInteger SDCacheCostForImage(UIImage *image) {
 
                 // If the imageData is nil (i.e. if trying to save a UIImage directly or the image was transformed on download)
                 // and the image has an alpha channel, we will consider it PNG to avoid losing the transparency
+                
+                // 图片有alpha通道 就当做PNG类型处理 避免损失透明度
                 int alphaInfo = CGImageGetAlphaInfo(image.CGImage);
                 BOOL hasAlpha = !(alphaInfo == kCGImageAlphaNone ||
                                   alphaInfo == kCGImageAlphaNoneSkipFirst ||
@@ -301,7 +311,7 @@ FOUNDATION_STATIC_INLINE NSUInteger SDCacheCostForImage(UIImage *image) {
                 if ([imageData length] >= [kPNGSignatureData length]) {
                     imageIsPng = ImageDataHasPNGPreffix(imageData);
                 }
-
+                //
                 if (imageIsPng) {
                     data = UIImagePNGRepresentation(image);
                 }
@@ -332,18 +342,56 @@ FOUNDATION_STATIC_INLINE NSUInteger SDCacheCostForImage(UIImage *image) {
         return;
     }
     
+    // _diskCachePath: ../Library/Caches/default/com.hackemist.SDWebImageCache.default
     if (![_fileManager fileExistsAtPath:_diskCachePath]) {
         [_fileManager createDirectoryAtPath:_diskCachePath withIntermediateDirectories:YES attributes:nil error:NULL];
     }
     
+    /**
+     cachePathForKey:
+     ../Library/Caches/default/com.hackemist.SDWebImageCache.default/488c2b79320fda64e077374f56b0f970.jpg
+     
+     fileURL:
+     file:///~/.../Library/Caches/default/com.hackemist.SDWebImageCache.default/488c2b79320fda64e077374f56b0f970.jpg
+     */
+    
     // get cache Path for image key
     NSString *cachePathForKey = [self defaultCachePathForKey:key];
+    
     // transform to NSUrl
     NSURL *fileURL = [NSURL fileURLWithPath:cachePathForKey];
     
+    /**
+     Summary
+     
+     Creates a file with the specified content and attributes at the given location.
+     Declaration
+     
+     - (BOOL)createFileAtPath:(NSString *)path contents:(NSData *)data attributes:(NSDictionary<NSFileAttributeKey, id> *)attr;
+     Discussion
+     
+     If you specify nil for the attributes parameter, this method uses a default set of values for the owner, group, and permissions of any newly created directories in the path. Similarly, if you omit a specific attribute, the default value is used. The default values for newly created files are as follows:
+     Permissions are set according to the umask of the current process. For more information, see umask.
+     The owner ID is set to the effective user ID of the process.
+     The group ID is set to that of the parent directory.
+     If a file already exists at path, this method overwrites the contents of that file if the current process has the appropriate privileges to do so.
+     Parameters
+     
+     path
+     The path for the new file.
+     contents
+     A data object containing the contents of the new file.
+     attributes
+     A dictionary containing the attributes to associate with the new file. You can use these attributes to set the owner and group numbers, file permissions, and modification date. For a list of keys, see NSFileAttributeKey. If you specify nil for attributes, the file is created with a set of default attributes.
+     Returns
+     
+     YES if the operation was successful or if the item already exists, otherwise NO.
+     */
+    
+    // 在目标路径下创建文件 文件的名字就是488c2b79320fda64e077374f56b0f970.jpg 内容是imageData
     [_fileManager createFileAtPath:cachePathForKey contents:imageData attributes:nil];
     
-    // disable iCloud backup
+    // disable iCloud backup 关闭该文件的iCloud备份功能
     if (self.shouldDisableiCloud) {
         [fileURL setResourceValue:[NSNumber numberWithBool:YES] forKey:NSURLIsExcludedFromBackupKey error:nil];
     }
@@ -590,6 +638,8 @@ FOUNDATION_STATIC_INLINE NSUInteger SDCacheCostForImage(UIImage *image) {
     [self.memCache removeAllObjects];
 }
 
+
+// "清除"硬盘缓存的方法--即删掉硬盘中的缓存不论是否过期
 - (void)clearDisk {
     [self clearDiskOnCompletion:nil];
 }
@@ -597,6 +647,7 @@ FOUNDATION_STATIC_INLINE NSUInteger SDCacheCostForImage(UIImage *image) {
 - (void)clearDiskOnCompletion:(SDWebImageNoParamsBlock)completion
 {
     dispatch_async(self.ioQueue, ^{
+        // 清除硬盘缓存后,再次创建硬盘缓存的文件路径
         [_fileManager removeItemAtPath:self.diskCachePath error:nil];
         [_fileManager createDirectoryAtPath:self.diskCachePath
                 withIntermediateDirectories:YES
@@ -611,10 +662,17 @@ FOUNDATION_STATIC_INLINE NSUInteger SDCacheCostForImage(UIImage *image) {
     });
 }
 
+
+// "清理"硬盘缓存的方法--只删除过期的数据
 - (void)cleanDisk {
     [self cleanDiskWithCompletionBlock:nil];
 }
 
+/**
+ 具体的清理流程
+    1.清理过期的资源
+    2.缓存占用的空间超过最大的缓存空间。按照资源的缓存时间从大到小删除,直到占用的空间下降为最大容量的一半
+ */
 - (void)cleanDiskWithCompletionBlock:(SDWebImageNoParamsBlock)completionBlock {
     dispatch_async(self.ioQueue, ^{
         NSURL *diskCacheURL = [NSURL fileURLWithPath:self.diskCachePath isDirectory:YES];

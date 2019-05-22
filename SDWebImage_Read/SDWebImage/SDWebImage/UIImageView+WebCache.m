@@ -65,10 +65,11 @@ static char TAG_ACTIVITY_SHOW;
         }
         // sharedManager是个单例 为了避免内存泄漏使用__weak修饰self
         __weak __typeof(self)wself = self;
-        // 开始下载图片
+        
+        // 创建operation
         id <SDWebImageOperation> operation = [SDWebImageManager.sharedManager downloadImageWithURL:url options:options progress:progressBlock completed:^(UIImage *image, NSError *error, SDImageCacheType cacheType, BOOL finished, NSURL *imageURL) {
             
-            /****  图片下载完成后的处理    ****/
+            /****  图片下载完成后的回调    ****/
             
             // 移除菊花指示器
             [wself removeActivityIndicator];
