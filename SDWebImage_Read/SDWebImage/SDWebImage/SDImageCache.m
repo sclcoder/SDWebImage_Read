@@ -13,7 +13,36 @@
 
 // See https://github.com/rs/SDWebImage/pull/1141 for discussion
 @interface AutoPurgeCache : NSCache
+/******
+ Summary
+ 
+ A mutable collection you use to temporarily store transient(短暂的) key-value pairs that are subject to(使服从) eviction(逐出) when resources are low.
+ Declaration
+ 
+ @interface NSCache<__covariant KeyType, __covariant ObjectType> : NSObject
+ Discussion
+ 
+ Cache objects differ from other mutable collections in a few ways:
+ 
+ 自动清理内存
+ The NSCache class incorporates various auto-eviction(自动收回) policies, which ensure that a cache doesn’t use too much of the system’s memory. If memory is needed by other applications, these policies remove some items from the cache, minimizing its memory footprint.
+ 
+ 线程安全的
+ You can add, remove, and query items in the cache from different threads without having to lock the cache yourself.
+ 
+ 
+ Unlike an NSMutableDictionary object, a cache does not copy the key objects that are put into it.
+
+ 
+ You typically use NSCache objects to temporarily store objects with transient data that are expensive to create. Reusing these objects can provide performance benefits, because their values do not have to be recalculated. However, the objects are not critical to the application and can be discarded if memory is tight. If discarded, their values will have to be recomputed again when needed.
+ 
+ Objects that have subcomponents that can be discarded when not being used can adopt the NSDiscardableContent protocol to improve cache eviction behavior. By default, NSDiscardableContent objects in a cache are automatically removed if their content is discarded, although this automatic removal policy can be changed. If an NSDiscardableContent object is put into the cache, the cache calls discardContentIfPossible on it upon its removal.
+ 
+ *****/
+
 @end
+
+
 
 @implementation AutoPurgeCache
 
@@ -35,9 +64,14 @@
 
 @end
 
+
+
+
+
+
 // 默认缓存时间 一周
-static const NSInteger kDefaultCacheMaxCacheAge = 60 * 60 * 24 * 7; // 1 week
-// PNG signature bytes and data (below)
+static const NSInteger kDefaultCacheMaxCacheAge = 60 * 60 * 24 * 7;
+
 /**
      PNG图像格式文件（或者称为数据流）由一个8字节的PNG文件署名（PNG file signature）域和按照特定结构组织的3个以上的数据块（chunk）组成。
      文件署名域
@@ -47,6 +81,7 @@ static const NSInteger kDefaultCacheMaxCacheAge = 60 * 60 * 24 * 7; // 1 week
         ----来自于百度百科
  */
 
+// PNG signature bytes and data (below)
 static unsigned char kPNGSignatureBytes[8] = {0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A};
 static NSData *kPNGSignatureData = nil;
 
@@ -69,7 +104,7 @@ FOUNDATION_STATIC_INLINE NSUInteger SDCacheCostForImage(UIImage *image) {
 
 @interface SDImageCache ()
 
-// NSCache类似于NSMutableDictionary
+// NSCache用法类似于NSMutableDictionary
 @property (strong, nonatomic) NSCache *memCache;
 @property (strong, nonatomic) NSString *diskCachePath;
 @property (strong, nonatomic) NSMutableArray *customPaths;
@@ -93,11 +128,13 @@ FOUNDATION_STATIC_INLINE NSUInteger SDCacheCostForImage(UIImage *image) {
 }
 
 - (id)init {
+    // .../Library/Caches/default/com.hackemist.SDWebImageCache.default
+    // 命名空间默认是default
     return [self initWithNamespace:@"default"];
 }
 
 - (id)initWithNamespace:(NSString *)ns {
-    // 硬盘缓存路径
+    // 硬盘缓存路径   .../Library/Caches/default
     NSString *path = [self makeDiskCachePath:ns];
     return [self initWithNamespace:ns diskCacheDirectory:path];
 }
@@ -227,7 +264,6 @@ FOUNDATION_STATIC_INLINE NSUInteger SDCacheCostForImage(UIImage *image) {
 // Init the disk cache
 // 硬盘缓存路径
 -(NSString *)makeDiskCachePath:(NSString*)fullNamespace{
-    
     NSArray *paths = NSSearchPathForDirectoriesInDomains(NSCachesDirectory, NSUserDomainMask, YES);
     return [paths[0] stringByAppendingPathComponent:fullNamespace];
 }
