@@ -94,11 +94,35 @@ static NSString *const kCompletedCallbackKey = @"completed";
         NSURLSessionConfiguration *sessionConfig = [NSURLSessionConfiguration defaultSessionConfiguration];
         sessionConfig.timeoutIntervalForRequest = _downloadTimeout;
 
+        /** delegateQueue = nil
+         The queue should be a serial queue, in order to ensure the correct ordering of callbacks. If nil, the session creates a serial operation queue for performing all delegate method calls and completion handler calls.
+         */
         // 设置session的代理为self
         self.session = [NSURLSession sessionWithConfiguration:sessionConfig
                                                      delegate:self
                                                 delegateQueue:nil];
         /**
+         为什么代理遵守<NSURLSessionDelegate>这个基协议,但是在实现协议方法时实现了很多该协议的子协议呢？
+         
+         <NSURLSessionDelegate>协议说明
+         
+         A protocol defining methods that NSURLSession instances call on their delegates to handle session-level events, like session life cycle changes.
+         Declaration
+         
+         @protocol NSURLSessionDelegate
+         Discussion
+         
+         In addition to the methods defined in this protocol, most delegates should also implement some or all of the methods in the NSURLSessionTaskDelegate, NSURLSessionDataDelegate, and NSURLSessionDownloadDelegate protocols to handle task-level events. These include events like the beginning and end of individual tasks, and periodic progress updates from data or download tasks.
+         Note
+         Your NSURLSession object doesn’t need to have a delegate. If no delegate is assigned, a system-provided delegate is used, and you must provide a completion callback to obtain the data.
+
+         
+         
+         
+         
+         方法说明
+         + (NSURLSession *)sessionWithConfiguration:(NSURLSessionConfiguration *)configuration delegate:(id<NSURLSessionDelegate>)delegate delegateQueue:(NSOperationQueue *)queue;
+
          Summary
          
          Creates a session with the specified session configuration, delegate, and operation queue.
@@ -163,7 +187,12 @@ static NSString *const kCompletedCallbackKey = @"completed";
     
     __block SDWebImageDownloaderOperation *operation;
     __weak __typeof(self)wself = self;
-
+    
+    /** 发方法主要做了以下处理
+        1.记录url级别的各种回调
+        2.并创建和配置operation
+        3.将operation添加到downloadQueue(执行operation)
+     */
     [self addProgressCallback:progressBlock completedBlock:completedBlock forURL:url createCallback:^{
         
         NSTimeInterval timeoutInterval = wself.downloadTimeout;
@@ -210,7 +239,7 @@ static NSString *const kCompletedCallbackKey = @"completed";
             request.allHTTPHeaderFields = wself.HTTPHeaders;
         }
         
-        // 创建并初始化请求操作
+        // 创建并初始化请求操作---每次请求都会创建新的operation
         operation = [[wself.operationClass alloc]
                     initWithRequest:request
                     inSession:self.session
@@ -373,7 +402,7 @@ static NSString *const kCompletedCallbackKey = @"completed";
 }
 
 #pragma mark Helper methods
-
+// 通过dataTask.taskIdentifier找到对应的operation
 - (SDWebImageDownloaderOperation *)operationWithTask:(NSURLSessionTask *)task {
     
     SDWebImageDownloaderOperation *returnOperation = nil;
@@ -386,9 +415,10 @@ static NSString *const kCompletedCallbackKey = @"completed";
     return returnOperation;
 }
 
-#pragma mark NSURLSessionDataDelegate
 
-// 回调方法都转发给了dataOperation
+// 将代理方法转发给通过dataTask找到的operation
+
+#pragma mark NSURLSessionDataDelegate
 
 - (void)URLSession:(NSURLSession *)session
           dataTask:(NSURLSessionDataTask *)dataTask

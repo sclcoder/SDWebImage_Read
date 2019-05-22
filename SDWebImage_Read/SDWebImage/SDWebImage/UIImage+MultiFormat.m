@@ -17,11 +17,12 @@
 
 @implementation UIImage (MultiFormat)
 
+// 通过data创建image
 + (UIImage *)sd_imageWithData:(NSData *)data {
     if (!data) {
         return nil;
     }
-    
+
     UIImage *image;
     // 获取图片类型
     NSString *imageContentType = [NSData sd_contentTypeForImageData:data];

@@ -265,12 +265,48 @@ NSString *const SDWebImageDownloadFinishNotification = @"SDWebImageDownloadFinis
     return YES;
 }
 
+
+// 每个operation对象都会收到这些转发来的消息
 #pragma mark NSURLSessionDataDelegate
 
 - (void)URLSession:(NSURLSession *)session
           dataTask:(NSURLSessionDataTask *)dataTask
 didReceiveResponse:(NSURLResponse *)response
  completionHandler:(void (^)(NSURLSessionResponseDisposition disposition))completionHandler {
+    
+    /**
+     <NSHTTPURLResponse: 0x600000f28f80> { URL: http://pic40.nipic.com/20140412/18428321_144447597175_2.jpg } { Status Code: 200, Headers {
+         "Accept-Ranges" =     (
+                 bytes
+             );
+         "Cache-Control" =     (
+             "max-age=92592000"
+             );
+         "Content-Length" =     (
+             102961
+             );
+         "Content-Type" =     (
+             "image/jpeg"
+             );
+         Date =     (
+             "Tue, 21 May 2019 09:14:00 GMT"
+             );
+         Etag =     (
+             "\"806e8507b58cf1:0\""
+             );
+         "Last-Modified" =     (
+             "Tue, 15 Apr 2014 07:19:13 GMT"
+             );
+         Server =     (
+             "Microsoft-IIS/7.5"
+             );
+         "X-Powered-By" =     (
+             "ASP.NET"
+             );
+     } }
+
+     
+     */
     
     //'304 Not Modified' is an exceptional one
     if (![response respondsToSelector:@selector(statusCode)] || ([((NSHTTPURLResponse *)response) statusCode] < 400 && [((NSHTTPURLResponse *)response) statusCode] != 304)) {
@@ -291,6 +327,8 @@ didReceiveResponse:(NSURLResponse *)response
         
         //This is the case when server returns '304 Not Modified'. It means that remote image is not changed.
         //In case of 304 we need just cancel the operation and return cached image from the cache.
+        
+        // 304取消请求 使用缓存即可
         if (code == 304) {
             [self cancelInternal];
         } else {
@@ -312,8 +350,10 @@ didReceiveResponse:(NSURLResponse *)response
 }
 
 - (void)URLSession:(NSURLSession *)session dataTask:(NSURLSessionDataTask *)dataTask didReceiveData:(NSData *)data {
+    // 拼接数据
     [self.imageData appendData:data];
-
+    
+    // 渐进式加载SDWebImageDownloaderProgressiveDownload
     if ((self.options & SDWebImageDownloaderProgressiveDownload) && self.expectedSize > 0 && self.completedBlock) {
         // The following code is from http://www.cocoaintheshell.com/2011/05/progressive-images-download-imageio/
         // Thanks to the author @Nyx0uf
@@ -396,6 +436,38 @@ didReceiveResponse:(NSURLResponse *)response
     }
 }
 
+/**
+ Summary
+ 
+ Asks the delegate whether the data (or upload) task should store the response in the cache.
+ Declaration
+ 
+ - (void)URLSession:(NSURLSession *)session dataTask:(NSURLSessionDataTask *)dataTask willCacheResponse:(NSCachedURLResponse *)proposedResponse completionHandler:(void (^)(NSCachedURLResponse *cachedResponse))completionHandler;
+ Discussion
+ 
+ The session calls this delegate method after the task finishes receiving all of the expected data. If you don’t implement this method, the default behavior is to use the caching policy specified in the session’s configuration object. The primary purpose of this method is to prevent caching of specific URLs or to modify the userInfo dictionary associated with the URL response.
+ This method is called only if the NSURLProtocol handling the request decides to cache the response. As a rule, responses are cached only when all of the following are true:
+ The request is for an HTTP or HTTPS URL (or your own custom networking protocol that supports caching).
+ The request was successful (with a status code in the 200–299 range).
+ The provided response came from the server, rather than out of the cache.
+ The session configuration’s cache policy allows caching.
+ The provided URLRequest object's cache policy (if applicable) allows caching.
+ The cache-related headers in the server’s response (if present) allow caching.
+ The response size is small enough to reasonably fit within the cache. (For example, if you provide a disk cache, the response must be no larger than about 5% of the disk cache size.)
+ Parameters
+ 
+ session
+ The session containing the data (or upload) task.
+ dataTask
+ The data (or upload) task.
+ proposedResponse
+ The default caching behavior. This behavior is determined based on the current caching policy and the values of certain received headers, such as the Pragma and Cache-Control headers.
+ 
+ 
+ completionHandler
+ A block that your handler must call, providing either the original proposed response, a modified version of that response, or NULL to prevent caching the response. If your delegate implements this method, it must call this completion handler; otherwise, your app leaks memory.
+ 
+ */
 - (void)URLSession:(NSURLSession *)session
           dataTask:(NSURLSessionDataTask *)dataTask
  willCacheResponse:(NSCachedURLResponse *)proposedResponse
@@ -408,6 +480,11 @@ didReceiveResponse:(NSURLResponse *)response
         // Prevents caching of responses
         cachedResponse = nil;
     }
+    
+    /**
+     completionHandler
+     A block that your handler must call, providing either the original proposed response, a modified version of that response, or NULL to prevent caching the response. If your delegate implements this method, it must call this completion handler; otherwise, your app leaks memory.
+     */
     if (completionHandler) {
         completionHandler(cachedResponse);
     }
@@ -442,8 +519,11 @@ didReceiveResponse:(NSURLResponse *)response
              *  Note: responseFromCached is set to NO inside `willCacheResponse:`. This method doesn't get called for large images or images behind authentication 
              */
             if (self.options & SDWebImageDownloaderIgnoreCachedResponse && responseFromCached && [[NSURLCache sharedURLCache] cachedResponseForRequest:self.request]) {
+                // 忽略NSURLCache的缓存
                 completionBlock(nil, nil, nil, YES);
             } else if (self.imageData) {
+                
+                // 获取相应scale大小的image
                 UIImage *image = [UIImage sd_imageWithData:self.imageData];
                 NSString *key = [[SDWebImageManager sharedManager] cacheKeyForURL:self.request.URL];
                 image = [self scaledImageForKey:key image:image];
