@@ -83,7 +83,11 @@ NSString *const SDWebImageDownloadFinishNotification = @"SDWebImageDownloadFinis
         _executing = NO;
         _finished = NO;
         _expectedSize = 0;
-        _unownedSession = session; // 使用session初始化_unownedSession
+        /**
+            注入的session
+            使用session初始化_unownedSession。传入的session的回调代理是SDWebImageDownloaderOperation对象
+         */
+        _unownedSession = session;
         responseFromCached = YES; // Initially wrong until `- URLSession:dataTask:willCacheResponse:completionHandler: is called or not called
     }
     return self;
@@ -141,6 +145,7 @@ NSString *const SDWebImageDownloadFinishNotification = @"SDWebImageDownloadFinis
 #endif
         NSURLSession *session = self.unownedSession;
         if (!self.unownedSession) {
+            // 注入的session不存在就自己创建session 并且将回调代理设置为自己。
             NSURLSessionConfiguration *sessionConfig = [NSURLSessionConfiguration defaultSessionConfiguration];
             sessionConfig.timeoutIntervalForRequest = 15;
             
@@ -155,6 +160,7 @@ NSString *const SDWebImageDownloadFinishNotification = @"SDWebImageDownloadFinis
             session = self.ownedSession;
         }
         
+        // 使用session创建请求任务
         self.dataTask = [session dataTaskWithRequest:self.request];
         self.executing = YES;
         self.thread = [NSThread currentThread];

@@ -188,7 +188,7 @@
     
     /**
      queryDiskCacheForKey:done:
-        1.通过key从缓存中查询image,并进行回调
+        1.通过key从缓存中查询image,并进行回调--回调过程是串行队列异步任务
         2.返回创建的cacheOperation（NSOperation类型）如果是内存缓存则cacheOperation=nil
     */
     operation.cacheOperation = [self.imageCache queryDiskCacheForKey:key done:^(UIImage *image, SDImageCacheType cacheType) {

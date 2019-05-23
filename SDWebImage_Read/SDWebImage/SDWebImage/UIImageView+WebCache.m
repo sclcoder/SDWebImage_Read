@@ -41,6 +41,49 @@ static char TAG_ACTIVITY_SHOW;
     [self sd_setImageWithURL:url placeholderImage:placeholder options:options progress:nil completed:completedBlock];
 }
 
+
+/****************
+ 
+具体请求流程
+ 步骤1:
+ UIView相关分类调用各自的接口方法
+ UIImageView+WebCache中的方法
+ - (void)sd_setImageWithURL:(NSURL *)url placeholderImage:(UIImage *)placeholder options:(SDWebImageOptions)options progress:(SDWebImageDownloaderProgressBlock)progressBlock completed:(SDWebImageCompletionBlock)completedBlock;
+
+ 
+ 步骤2:
+ 步骤1中方法调用了SDWebImageManager的接口方法(传入相关的参数、回调等)获取返回的SDWebImageOperation对象
+ 调用的SDWebImageManager中的方法
+ - (id <SDWebImageOperation>)downloadImageWithURL:(NSURL *)url
+ options:(SDWebImageOptions)options
+ progress:(SDWebImageDownloaderProgressBlock)progressBlock
+ completed:(SDWebImageCompletionWithFinishedBlock)completedBlock;
+ 
+ 步骤3:
+ SDWebImageManager的方法中,会创建SDWebImageOperation对象。在设置SDWebImageOperation对象的属性时,会异步查询本地的硬盘中是否有缓存,从而根据情况决定是否进行网络请求。在这个异步查询的回调中,如果需要网络请求,就调用SDWebImageDownloader对象的接口方法进行下载。
+ 调用的SDWebImageDownloader中的方法
+- (id <SDWebImageOperation>)downloadImageWithURL:(NSURL *)url options:(SDWebImageDownloaderOptions)options progress:(SDWebImageDownloaderProgressBlock)progressBlock completed:(SDWebImageDownloaderCompletedBlock)completedBlock
+ 
+ 步骤4:
+ SDWebImageDownloader的方法中会保存传入进度回调和完成回调,并且创建下载的operation任务,并将该operation加入到NSOperationQueue中后返回,以上操作都是同步完成的。
+ 
+ 创建下载的operation过程涉及到 请求的创建、相关证书的设置等,这些值最终用来初始化了SDWebImageDownloaderOperation对象。
+ 
+ 步骤5:
+ 自定义的SDWebImageDownloaderOperation是抽象NSOperation类的子类。当operation添加到NSOperationQueue中后,系统就会异步调度加入的operation任务。
+ operation任务的入口就是operation的start方法。所以在SDWebImageDownloaderOperation对象的start方法中可以看到通过传入的相关参数构建了下载任务,并开启下载。
+ 
+ 
+ 需要注意的问题: 在下载过程中在SDWebImageDownloader中创建了session并且代理设置为了SDWebImageDownloader对象。当网络回调时将这些回调数据转发给了SDWebImageDownloaderOperation对象处理。如果SDWebImageDownloader中的session没有创建,那么SDWebImageDownloaderOperation对象中会自己创建session并自己处理网络回调。但是不论是使用哪个session最终下载任务的启动都是在SDWebImageDownloaderOperation对象的start方法中。
+ 
+****************/
+
+
+
+
+
+
+
 // 加载单张图的最终方法
 - (void)sd_setImageWithURL:(NSURL *)url placeholderImage:(UIImage *)placeholder options:(SDWebImageOptions)options progress:(SDWebImageDownloaderProgressBlock)progressBlock completed:(SDWebImageCompletionBlock)completedBlock {
     

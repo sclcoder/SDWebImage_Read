@@ -538,6 +538,7 @@ FOUNDATION_STATIC_INLINE NSUInteger SDCacheCostForImage(UIImage *image) {
     NSOperation *operation = [NSOperation new];
     
     // 串行队列异步任务会开启一条子线程（开启新的线程是针对当前线程而言）
+    // 异步查询硬盘是否有缓存
     dispatch_async(self.ioQueue, ^{
         
         // 因为是异步任务 所以在执行时operation有可能已经被取消了
