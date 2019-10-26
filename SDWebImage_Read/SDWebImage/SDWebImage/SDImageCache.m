@@ -189,12 +189,12 @@ FOUNDATION_STATIC_INLINE NSUInteger SDCacheCostForImage(UIImage *image) {
                                                  selector:@selector(clearMemory)
                                                      name:UIApplicationDidReceiveMemoryWarningNotification
                                                    object:nil];
-        // 清理磁盘
+        // 应用退出时 清理磁盘
         [[NSNotificationCenter defaultCenter] addObserver:self
                                                  selector:@selector(cleanDisk)
                                                      name:UIApplicationWillTerminateNotification
                                                    object:nil];
-        // 后台清理磁盘
+        // 应用进入后台时 后台清理磁盘
         [[NSNotificationCenter defaultCenter] addObserver:self
                                                  selector:@selector(backgroundCleanDisk)
                                                      name:UIApplicationDidEnterBackgroundNotification
@@ -278,7 +278,7 @@ FOUNDATION_STATIC_INLINE NSUInteger SDCacheCostForImage(UIImage *image) {
         return;
     }
     // if memory cache is enabled
-    // 内存缓存 缓存的是UIImage类型的对象
+    // 内存缓存 缓存的是UIImage类型的对象(可能已经解码过)
     if (self.shouldCacheImagesInMemory) {
         NSUInteger cost = SDCacheCostForImage(image);
         [self.memCache setObject:image forKey:key cost:cost];
@@ -289,7 +289,7 @@ FOUNDATION_STATIC_INLINE NSUInteger SDCacheCostForImage(UIImage *image) {
         dispatch_async(self.ioQueue, ^{
             NSData *data = imageData;
 
-            // 以下操作是将 UIImage转化为NSData
+            // 重新计算即将UIImage压缩为NSData
             if (image && (recalculate || !data)) {
 #if TARGET_OS_IPHONE
                 // We need to determine if the image is a PNG or a JPEG
@@ -323,6 +323,7 @@ FOUNDATION_STATIC_INLINE NSUInteger SDCacheCostForImage(UIImage *image) {
 #endif
             }
 
+            // 硬盘缓存--存储NSData
             [self storeImageDataToDisk:data forKey:key];
         });
     }
@@ -336,18 +337,17 @@ FOUNDATION_STATIC_INLINE NSUInteger SDCacheCostForImage(UIImage *image) {
     [self storeImage:image recalculateFromImage:YES imageData:nil forKey:key toDisk:toDisk];
 }
 
+/**
+ 硬盘存储的核心方法
+ */
 - (void)storeImageDataToDisk:(NSData *)imageData forKey:(NSString *)key {
     
     if (!imageData) {
         return;
     }
-    
-    // _diskCachePath: ../Library/Caches/default/com.hackemist.SDWebImageCache.default
-    if (![_fileManager fileExistsAtPath:_diskCachePath]) {
-        [_fileManager createDirectoryAtPath:_diskCachePath withIntermediateDirectories:YES attributes:nil error:NULL];
-    }
-    
     /**
+     _diskCachePath: ../Library/Caches/default/com.hackemist.SDWebImageCache.default
+     
      cachePathForKey:
      ../Library/Caches/default/com.hackemist.SDWebImageCache.default/488c2b79320fda64e077374f56b0f970.jpg
      
@@ -355,38 +355,15 @@ FOUNDATION_STATIC_INLINE NSUInteger SDCacheCostForImage(UIImage *image) {
      file:///~/.../Library/Caches/default/com.hackemist.SDWebImageCache.default/488c2b79320fda64e077374f56b0f970.jpg
      */
     
+    if (![_fileManager fileExistsAtPath:_diskCachePath]) {
+        [_fileManager createDirectoryAtPath:_diskCachePath withIntermediateDirectories:YES attributes:nil error:NULL];
+    }
+    
     // get cache Path for image key
     NSString *cachePathForKey = [self defaultCachePathForKey:key];
     
     // transform to NSUrl
     NSURL *fileURL = [NSURL fileURLWithPath:cachePathForKey];
-    
-    /**
-     Summary
-     
-     Creates a file with the specified content and attributes at the given location.
-     Declaration
-     
-     - (BOOL)createFileAtPath:(NSString *)path contents:(NSData *)data attributes:(NSDictionary<NSFileAttributeKey, id> *)attr;
-     Discussion
-     
-     If you specify nil for the attributes parameter, this method uses a default set of values for the owner, group, and permissions of any newly created directories in the path. Similarly, if you omit a specific attribute, the default value is used. The default values for newly created files are as follows:
-     Permissions are set according to the umask of the current process. For more information, see umask.
-     The owner ID is set to the effective user ID of the process.
-     The group ID is set to that of the parent directory.
-     If a file already exists at path, this method overwrites the contents of that file if the current process has the appropriate privileges to do so.
-     Parameters
-     
-     path
-     The path for the new file.
-     contents
-     A data object containing the contents of the new file.
-     attributes
-     A dictionary containing the attributes to associate with the new file. You can use these attributes to set the owner and group numbers, file permissions, and modification date. For a list of keys, see NSFileAttributeKey. If you specify nil for attributes, the file is created with a set of default attributes.
-     Returns
-     
-     YES if the operation was successful or if the item already exists, otherwise NO.
-     */
     
     // 在目标路径下创建文件 文件的名字就是488c2b79320fda64e077374f56b0f970.jpg 内容是imageData
     [_fileManager createFileAtPath:cachePathForKey contents:imageData attributes:nil];
@@ -446,6 +423,7 @@ FOUNDATION_STATIC_INLINE NSUInteger SDCacheCostForImage(UIImage *image) {
 
     // Second check the disk cache...
     UIImage *diskImage = [self diskImageForKey:key];
+    
     if (diskImage && self.shouldCacheImagesInMemory) {
         NSUInteger cost = SDCacheCostForImage(diskImage);
         [self.memCache setObject:diskImage forKey:key cost:cost];
@@ -454,24 +432,20 @@ FOUNDATION_STATIC_INLINE NSUInteger SDCacheCostForImage(UIImage *image) {
     return diskImage;
 }
 
+// 根据url生成的key从硬盘中查找对应的文件
 - (NSData *)diskImageDataBySearchingAllPathsForKey:(NSString *)key {
-    // key对应文件的默认路径
-    NSString *defaultPath = [self defaultCachePathForKey:key];
-    NSData *data = [NSData dataWithContentsOfFile:defaultPath];
-    if (data) {
+    NSString *defaultPath = [self defaultCachePathForKey:key]; // key对应文件的默认路径
+    NSData *data = [NSData dataWithContentsOfFile:defaultPath]; // 获取数据
+    if (data) { // 通过defaultPath方式找到
         return data;
     }
-    
-
-    /********* 一下处理都是应急措施 **********/
-    
     // fallback because of https://github.com/rs/SDWebImage/pull/976 that added the extension to the disk file name
     // checking the key with and without the extension
     data = [NSData dataWithContentsOfFile:[defaultPath stringByDeletingPathExtension]];
-    if (data) {
+    if (data) { // 通过这种方式找到
         return data;
     }
-
+    // 自定义路径的情况
     NSArray *customPaths = [self.customPaths copy];
     for (NSString *path in customPaths) {
         NSString *filePath = [self cachePathForKey:key inPath:path];
@@ -492,13 +466,17 @@ FOUNDATION_STATIC_INLINE NSUInteger SDCacheCostForImage(UIImage *image) {
 }
 
 - (UIImage *)diskImageForKey:(NSString *)key {
-    // 找到key对应的image数据
+    
+    // 1.通过key从硬盘中查找data
     NSData *data = [self diskImageDataBySearchingAllPathsForKey:key];
     if (data) {
-        // data转成image
+        // 2.data转成image
         UIImage *image = [UIImage sd_imageWithData:data];
+        
         image = [self scaledImageForKey:key image:image];
-        if (self.shouldDecompressImages) { // 解压
+        
+        if (self.shouldDecompressImages) {
+            // sd会将图片一般为png\jpeg格式的图片转换为bitmap
             image = [UIImage decodedImageWithImage:image];
         }
         return image;
@@ -512,46 +490,45 @@ FOUNDATION_STATIC_INLINE NSUInteger SDCacheCostForImage(UIImage *image) {
     return SDScaledImageForKey(key, image);
 }
 
-// 从硬盘查找缓存
+// 异步硬盘查找缓存 如果需要在硬盘中查找就创建个operation并返回
 - (NSOperation *)queryDiskCacheForKey:(NSString *)key done:(SDWebImageQueryCompletedBlock)doneBlock {
-    // 没有block返回nil
+    
     if (!doneBlock) {
         return nil;
     }
-    // 没有key 返回nil
     if (!key) {
         doneBlock(nil, SDImageCacheTypeNone);
         return nil;
     }
 
     // First check the in-memory cache...
-    // 先检查内存缓存,内存缓存命中则返回nil
     UIImage *image = [self imageFromMemoryCacheForKey:key];
     if (image) {
         doneBlock(image, SDImageCacheTypeMemory);
         return nil;
     }
     
-    /***************** 来到这,说明内存缓存没有命中 ********************/
-    
-    // 创建NSOperation（抽象类）
+    // 创建NSOperation（抽象类）: 此处这个operation并没有实际的操作,仅仅是用了isCancelled确保是否取消操作
+    // An abstract class that represents the code and data associated with a single task.
     NSOperation *operation = [NSOperation new];
     
-    // 串行队列异步任务会开启一条子线程（开启新的线程是针对当前线程而言）
     // 异步查询硬盘是否有缓存
     dispatch_async(self.ioQueue, ^{
-        
-        // 因为是异步任务 所以在执行时operation有可能已经被取消了
         if (operation.isCancelled) {
+            // 异步执行任务时,operation可能已经置为cancel,所以没必要执行下面的操作。
+            // 该operation的作用应该在此，相当于取消了GCD中的任务
             return;
         }
-        // 为什么要加@autoreleasepool? 这个方法内部会产生image对象可能开销较大
+        // 为什么要加@autoreleasepool? 这个方法内部会产生diskImage对象可能开销较大
         @autoreleasepool {
             
+            // 硬盘查找缓存信息
             UIImage *diskImage = [self diskImageForKey:key];
-            // 硬盘中缓存命中并且需要缓存到内存中
+            
             if (diskImage && self.shouldCacheImagesInMemory) {
+                // 硬盘中缓存命中并且需要缓存到内存中
                 NSUInteger cost = SDCacheCostForImage(diskImage);
+                // 内存缓存中缓存的是解压过的图片bitmap
                 [self.memCache setObject:diskImage forKey:key cost:cost];
             }
             
@@ -561,23 +538,8 @@ FOUNDATION_STATIC_INLINE NSUInteger SDCacheCostForImage(UIImage *image) {
             });
         }
     });
-    // 返回创建的operation
+ 
     return operation;
-    
-    /***
-     这个方法主要做了什么？
-        1.通过key从缓存中查询image,并进行回调
-        2.返回创建的operation
-     
-     方法说明
-     - (void)setObject:(ObjectType)obj forKey:(KeyType)key cost:(NSUInteger)g;
-     
-     Sets the value of the specified key in the cache, and associates the key-value pair with the specified cost.
-     
-     The cost value is used to compute a sum encompassing the costs of all the objects in the cache. When memory is limited or when the total cost of the cache eclipses the maximum allowed toxtal cost, the cache could begin an eviction(收回) process to remove some of its elements. However, this eviction process is not in a guaranteed order. As a consequence, if you try to manipulate(篡改) the cost values to achieve some specific behavior, the consequences could be detrimental(有害) to your program. Typically, the obvious cost is the size of the value in bytes. If that information is not readily available, you should not go through the trouble of trying to compute it, as doing so will drive up the cost of using the cache. Pass in 0 for the cost value if you otherwise have nothing useful to pass, or simply use the setObject:forKey: method, which does not require a cost value to be passed in.
-     
-     Unlike an NSMutableDictionary object, a cache does not copy the key objects that are put into it.
-     */
 
 }
 

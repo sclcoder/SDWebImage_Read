@@ -37,7 +37,7 @@ static NSString *const kCompletedCallbackKey = @"completed";
 + (void)initialize {
     // Bind SDNetworkActivityIndicator if available (download it here: http://github.com/rs/SDNetworkActivityIndicator )
     // To use it, just add #import "SDNetworkActivityIndicator.h" in addition to the SDWebImage import
-    if (NSClassFromString(@"SDNetworkActivityIndicator")) {
+    if (NSClassFromString(@"SDNetworkActivityIndicator")) { // 判断是否有SDNetworkActivityIndicator这个类
 
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Warc-performSelector-leaks"
@@ -68,9 +68,8 @@ static NSString *const kCompletedCallbackKey = @"completed";
 
 - (id)init {
     if ((self = [super init])) {
-        // 默认值
-        _operationClass = [SDWebImageDownloaderOperation class];
         
+        _operationClass = [SDWebImageDownloaderOperation class];
         _shouldDecompressImages = YES; // 默认解压图片
         _executionOrder = SDWebImageDownloaderFIFOExecutionOrder; // FIFO
         
@@ -78,15 +77,12 @@ static NSString *const kCompletedCallbackKey = @"completed";
         _downloadQueue = [NSOperationQueue new];
         _downloadQueue.maxConcurrentOperationCount = 6; // 最大并发数
         _downloadQueue.name = @"com.hackemist.SDWebImageDownloader";
-        
-        // 字典: key是url value是个可变数组
-        _URLCallbacks = [NSMutableDictionary new];
+        _URLCallbacks = [NSMutableDictionary new];  // 字典: key是url value是个可变数组(存放各种下载的各种回调)
 #ifdef SD_WEBP
         _HTTPHeaders = [@{@"Accept": @"image/webp,image/*;q=0.8"} mutableCopy];
 #else
         _HTTPHeaders = [@{@"Accept": @"image/*;q=0.8"} mutableCopy];
 #endif
-        // 下载时用的并发队列
         _barrierQueue = dispatch_queue_create("com.hackemist.SDWebImageDownloaderBarrierQueue", DISPATCH_QUEUE_CONCURRENT);
         _downloadTimeout = 15.0; // 超时时间
 
@@ -97,51 +93,10 @@ static NSString *const kCompletedCallbackKey = @"completed";
         /** delegateQueue = nil
          The queue should be a serial queue, in order to ensure the correct ordering of callbacks. If nil, the session creates a serial operation queue for performing all delegate method calls and completion handler calls.
          */
-        // 设置session的代理为self
+        // 设置session的代理为self: 接收到回调时会转发给SDWebImageDownloaderOperation
         self.session = [NSURLSession sessionWithConfiguration:sessionConfig
                                                      delegate:self
                                                 delegateQueue:nil];
-        /**
-         为什么代理遵守<NSURLSessionDelegate>这个基协议,但是在实现协议方法时实现了很多该协议的子协议呢？
-         
-         <NSURLSessionDelegate>协议说明
-         
-         A protocol defining methods that NSURLSession instances call on their delegates to handle session-level events, like session life cycle changes.
-         Declaration
-         
-         @protocol NSURLSessionDelegate
-         Discussion
-         
-         In addition to the methods defined in this protocol, most delegates should also implement some or all of the methods in the NSURLSessionTaskDelegate, NSURLSessionDataDelegate, and NSURLSessionDownloadDelegate protocols to handle task-level events. These include events like the beginning and end of individual tasks, and periodic progress updates from data or download tasks.
-         Note
-         Your NSURLSession object doesn’t need to have a delegate. If no delegate is assigned, a system-provided delegate is used, and you must provide a completion callback to obtain the data.
-
-         
-         
-         
-         
-         方法说明
-         + (NSURLSession *)sessionWithConfiguration:(NSURLSessionConfiguration *)configuration delegate:(id<NSURLSessionDelegate>)delegate delegateQueue:(NSOperationQueue *)queue;
-
-         Summary
-         
-         Creates a session with the specified session configuration, delegate, and operation queue.
-         Declaration
-         
-         + (NSURLSession *)sessionWithConfiguration:(NSURLSessionConfiguration *)configuration delegate:(id<NSURLSessionDelegate>)delegate delegateQueue:(NSOperationQueue *)queue;
-         Parameters
-         
-         configuration
-         A configuration object that specifies certain behaviors, such as caching policies, timeouts, proxies, pipelining, TLS versions to support, cookie policies, and credential storage.
-         See NSURLSessionConfiguration for more information.
-         delegate
-         A session delegate object that handles requests for authentication and other session-related events.
-         This delegate object is responsible for handling authentication challenges, for making caching decisions, and for handling other session-related events. If nil, the class should be used only with methods that take completion handlers.
-         Important
-         The session object keeps a strong reference to the delegate until your app exits or explicitly invalidates the session. If you do not invalidate the session by calling the invalidateAndCancel or finishTasksAndInvalidate method, your app leaks memory until it exits.
-         queue
-         An operation queue for scheduling the delegate calls and completion handlers. The queue should be a serial queue, in order to ensure the correct ordering of callbacks. If nil, the session creates a serial operation queue for performing all delegate method calls and completion handler calls.
-         */
     }
     return self;
 }
@@ -188,9 +143,9 @@ static NSString *const kCompletedCallbackKey = @"completed";
     __block SDWebImageDownloaderOperation *operation;
     __weak __typeof(self)wself = self;
     
-    /** 发方法主要做了以下处理
-        1.记录url级别的各种回调
-        2.并创建和配置operation
+    /** 方法主要做了以下处理
+        1.可能有多处下载同一个url:将这些下载的回调都保存起来，最终放到URLCallbacks中（url为key）
+        2.并创建和配置下载operation
         3.将operation添加到downloadQueue(执行operation)
      */
     [self addProgressCallback:progressBlock completedBlock:completedBlock forURL:url createCallback:^{
@@ -218,18 +173,15 @@ static NSString *const kCompletedCallbackKey = @"completed";
              如果没有指定是否失效，那么系统将自己判断缓存是否失效。（通常认为是6-24小时的有效时间）
          
          NSURLRequestReloadIgnoringLocalCacheData: Data should be loaded from the originating source. No existing cache data should be used. 不使用缓存
-         
          */
         
-        
-        // 这层缓存是SD的内部的网络层缓存??
+    
         // In order to prevent from potential duplicate caching (NSURLCache + SDImageCache) we disable the cache for image requests if told otherwise
-        // 如果使用SDWebImageDownloaderUseNSURLCache则使用NSURLCache的缓存策略 否则忽略本地缓存(重新请求)
-
-        // 创建请求
+        // 如果设置了SDWebImageDownloaderUseNSURLCache则使用NSURLCache的缓存策略 否则忽略本地缓存(重新请求)
         NSMutableURLRequest *request = [[NSMutableURLRequest alloc] initWithURL:url cachePolicy:(options & SDWebImageDownloaderUseNSURLCache ? NSURLRequestUseProtocolCachePolicy : NSURLRequestReloadIgnoringLocalCacheData) timeoutInterval:timeoutInterval];
         
         request.HTTPShouldHandleCookies = (options & SDWebImageDownloaderHandleCookies);
+        // A Boolean value that indicates whether the request can continue transmitting data before receiving a response from an earlier transmission.
         request.HTTPShouldUsePipelining = YES;
         
         if (wself.headersFilter) {
@@ -239,7 +191,10 @@ static NSString *const kCompletedCallbackKey = @"completed";
             request.allHTTPHeaderFields = wself.HTTPHeaders;
         }
         
-        // 创建并初始化请求操作---每次请求都会创建新的operation
+        
+        /// 一、创建并初始化请求操作---每次请求都会创建新的operation
+        
+        // wself.operationClass: SDWebImageDownloaderOperation
         operation = [[wself.operationClass alloc]
                     initWithRequest:request
                     inSession:self.session
@@ -278,7 +233,7 @@ static NSString *const kCompletedCallbackKey = @"completed";
                         }
                     }
                     cancelled:^{
-                            // 删除这个url的回调
+                            // 删除这个url的所有回调
                             SDWebImageDownloader *sself = wself;
                             if (!sself) return;
                             dispatch_barrier_async(sself.barrierQueue, ^{
@@ -305,9 +260,8 @@ static NSString *const kCompletedCallbackKey = @"completed";
         }
         
 
-        // 将operation添加到NSOperationQueue即开始执行任务了
+        ///  二、将operation添加到NSOperationQueue即异步执行operation, 在其start方法是入口
         [wself.downloadQueue addOperation:operation];
-        
         
         
         if (wself.executionOrder == SDWebImageDownloaderLIFOExecutionOrder) {
@@ -327,6 +281,7 @@ static NSString *const kCompletedCallbackKey = @"completed";
     return operation;
 }
 
+// 为每个url记录对应的进度回调、完成回调
 - (void)addProgressCallback:(SDWebImageDownloaderProgressBlock)progressBlock completedBlock:(SDWebImageDownloaderCompletedBlock)completedBlock forURL:(NSURL *)url createCallback:(SDWebImageNoParamsBlock)createCallback {
     
     // The URL will be used as the key to the callbacks dictionary so it cannot be nil. If it is nil immediately call the completed block with no image or data.
@@ -337,7 +292,7 @@ static NSString *const kCompletedCallbackKey = @"completed";
         return;
     }
 
-    // 使用dispatch_barrier_sync保证这段操作不会出现并发 任务按顺序执行
+    // 使用dispatch_barrier_sync保证这段操作不会出现并发: 因为涉及到NSMutableDictionary、NSMutableArray的线程不安全操作
     dispatch_barrier_sync(self.barrierQueue, ^{
         
         BOOL first = NO;
@@ -361,7 +316,7 @@ static NSString *const kCompletedCallbackKey = @"completed";
         
         //  同一个url仅仅在第一次来时调用 createCallback即可,createCallback中会发起下载
         if (first) {
-            createCallback();
+            createCallback(); // 执行
         }
         
         /**
@@ -386,15 +341,28 @@ static NSString *const kCompletedCallbackKey = @"completed";
     });
     
     /**
-     dispatch_barrier_sync 说明
+     dispatch_barrier_sync 说明:
+     1.必须在自定义并发队列中才起作用，如果是串行队列或全局队列效果好dispatch_sync一样
+     2.barrier block到达队列头时等待所有执行的block完成，然后再执行barrier block, 在barrier block之后进入队列的blcok需要在barrie blcok执行完成后才能执行
      
      Submits a barrier block to a dispatch queue for synchronous execution. Unlike dispatch_barrier_async, this function does not return until the barrier block has finished. Calling this function and targeting the current queue results in deadlock.
      When the barrier block reaches the front of a private concurrent queue, it is not executed immediately. Instead, the queue waits until its currently executing blocks finish executing. At that point, the queue executes the barrier block by itself. Any blocks submitted after the barrier block are not executed until the barrier block completes.
      The queue you specify should be a concurrent queue that you create yourself using the dispatch_queue_create function. If the queue you pass to this function is a serial queue or one of the global concurrent queues, this function behaves like the dispatch_sync function.
      Unlike with dispatch_barrier_async, no retain is performed on the target queue. Because calls to this function are synchronous, it "borrows" the reference of the caller. Moreover, no Block_copy is performed on the block.
      As an optimization, this function invokes the barrier block on the current thread when possible.
+     
+     
+     
+     dispatch_barrier_async: 和dispatch_barrier_sync 类似 一个返回一个不返回
+     
+     Calls to this function always return immediately after the block has been submitted and never wait for the block to be invoked. When the barrier block reaches the front of a private concurrent queue, it is not executed immediately. Instead, the queue waits until its currently executing blocks finish executing. At that point, the barrier block executes by itself. Any blocks submitted after the barrier block are not executed until the barrier block completes.
+     
+     The queue you specify should be a concurrent queue that you create yourself using the dispatch_queue_create function. If the queue you pass to this function is a serial queue or one of the global concurrent queues, this function behaves like the dispatch_async function.
      */
 }
+
+
+
 
 - (void)setSuspended:(BOOL)suspended {
     [self.downloadQueue setSuspended:suspended];
@@ -403,6 +371,8 @@ static NSString *const kCompletedCallbackKey = @"completed";
 - (void)cancelAllDownloads {
     [self.downloadQueue cancelAllOperations];
 }
+
+
 
 #pragma mark Helper methods
 // 通过dataTask.taskIdentifier找到对应的operation

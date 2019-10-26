@@ -170,7 +170,7 @@ SDWebImageManager *manager = [SDWebImageManager sharedManager];
  * @endcode
  */
 
-// SDWebImageManager绑定了带有缓存机制的异步下载器SDWebImageDownloader。可以直接使用改类,没必要必须在配合UIView使用。
+// SDWebImageManager绑定了带有缓存机制的异步下载器SDWebImageDownloader。可以直接使用改类,没必要必须配合UIView使用。
 @interface SDWebImageManager : NSObject
 // 管理者代理
 @property (weak, nonatomic) id <SDWebImageManagerDelegate> delegate;

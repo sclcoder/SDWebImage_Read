@@ -328,7 +328,7 @@ didReceiveResponse:(NSURLResponse *)response
             [[NSNotificationCenter defaultCenter] postNotificationName:SDWebImageDownloadReceiveResponseNotification object:self];
         });
     }
-    else {
+    else { // 304 或 >400者
         NSUInteger code = [((NSHTTPURLResponse *)response) statusCode];
         
         //This is the case when server returns '304 Not Modified'. It means that remote image is not changed.
@@ -343,7 +343,7 @@ didReceiveResponse:(NSURLResponse *)response
         dispatch_async(dispatch_get_main_queue(), ^{
             [[NSNotificationCenter defaultCenter] postNotificationName:SDWebImageDownloadStopNotification object:self];
         });
-        
+       
         if (self.completedBlock) {
             self.completedBlock(nil, nil, [NSError errorWithDomain:NSURLErrorDomain code:[((NSHTTPURLResponse *)response) statusCode] userInfo:nil], YES);
         }
@@ -442,44 +442,18 @@ didReceiveResponse:(NSURLResponse *)response
     }
 }
 
-/**
- Summary
- 
- Asks the delegate whether the data (or upload) task should store the response in the cache.
- Declaration
- 
- - (void)URLSession:(NSURLSession *)session dataTask:(NSURLSessionDataTask *)dataTask willCacheResponse:(NSCachedURLResponse *)proposedResponse completionHandler:(void (^)(NSCachedURLResponse *cachedResponse))completionHandler;
- Discussion
- 
- The session calls this delegate method after the task finishes receiving all of the expected data. If you don’t implement this method, the default behavior is to use the caching policy specified in the session’s configuration object. The primary purpose of this method is to prevent caching of specific URLs or to modify the userInfo dictionary associated with the URL response.
- This method is called only if the NSURLProtocol handling the request decides to cache the response. As a rule, responses are cached only when all of the following are true:
- The request is for an HTTP or HTTPS URL (or your own custom networking protocol that supports caching).
- The request was successful (with a status code in the 200–299 range).
- The provided response came from the server, rather than out of the cache.
- The session configuration’s cache policy allows caching.
- The provided URLRequest object's cache policy (if applicable) allows caching.
- The cache-related headers in the server’s response (if present) allow caching.
- The response size is small enough to reasonably fit within the cache. (For example, if you provide a disk cache, the response must be no larger than about 5% of the disk cache size.)
- Parameters
- 
- session
- The session containing the data (or upload) task.
- dataTask
- The data (or upload) task.
- proposedResponse
- The default caching behavior. This behavior is determined based on the current caching policy and the values of certain received headers, such as the Pragma and Cache-Control headers.
- 
- 
- completionHandler
- A block that your handler must call, providing either the original proposed response, a modified version of that response, or NULL to prevent caching the response. If your delegate implements this method, it must call this completion handler; otherwise, your app leaks memory.
- 
- */
 - (void)URLSession:(NSURLSession *)session
           dataTask:(NSURLSessionDataTask *)dataTask
  willCacheResponse:(NSCachedURLResponse *)proposedResponse
  completionHandler:(void (^)(NSCachedURLResponse *cachedResponse))completionHandler {
 
     responseFromCached = NO; // If this method is called, it means the response wasn't read from cache
+    
+    /**
+     A NSCachedURLResponse object provides the server’s response metadata in the form of a NSURLResponse object, along with an NSData object containing the actual cached content data. Its storage policy determines whether the response should be cached on disk, in memory, or not at all.
+     Cached responses also contain a user info dictionary where you can store app-specific information about the cached item.
+     The NSURLCache class stores and retrieves instances of NSCachedURLResponse
+     */
     NSCachedURLResponse *cachedResponse = proposedResponse;
 
     if (self.request.cachePolicy == NSURLRequestReloadIgnoringLocalCacheData) {
@@ -524,20 +498,18 @@ didReceiveResponse:(NSURLResponse *)response
              *    and images for which responseFromCached is YES (only the ones that cannot be cached).
              *  Note: responseFromCached is set to NO inside `willCacheResponse:`. This method doesn't get called for large images or images behind authentication 
              */
-            if (self.options & SDWebImageDownloaderIgnoreCachedResponse && responseFromCached && [[NSURLCache sharedURLCache] cachedResponseForRequest:self.request]) {
-                // 忽略NSURLCache的缓存
+            if (self.options & SDWebImageDownloaderIgnoreCachedResponse && responseFromCached && [[NSURLCache sharedURLCache] cachedResponseForRequest:self.request]) { // 忽略NSURLCache的缓存
                 completionBlock(nil, nil, nil, YES);
-            } else if (self.imageData) {
-                // imageData是从服务端下载的数据NSMutableData类型
-                // 获取相应scale大小的image
+            } else if (self.imageData) {  // imageData是从服务端下载的数据NSMutableData类型
+                // 下载的imageData经过处理生成image
                 UIImage *image = [UIImage sd_imageWithData:self.imageData];
                 NSString *key = [[SDWebImageManager sharedManager] cacheKeyForURL:self.request.URL];
-                // 下载的imageData经过处理生成image
                 image = [self scaledImageForKey:key image:image];
                 
                 // Do not force decoding animated GIFs
                 if (!image.images) {
                     if (self.shouldDecompressImages) {
+                        // 将压缩过的图片（JPEG、PNG、WebP、APNG）解压成未压缩的位图(bitmap)。
                         image = [UIImage decodedImageWithImage:image];
                     }
                 }

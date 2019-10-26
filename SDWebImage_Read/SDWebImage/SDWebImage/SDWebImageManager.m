@@ -9,6 +9,7 @@
 #import "SDWebImageManager.h"
 #import <objc/message.h>
 
+/// 继承NSObject
 @interface SDWebImageCombinedOperation : NSObject <SDWebImageOperation>
 
 @property (assign, nonatomic, getter = isCancelled) BOOL cancelled;
@@ -147,73 +148,52 @@
         url = nil;
     }
 
-    // 创建SDWebImageCombinedOperation对象
+    /// 一、创建SDWebImageCombinedOperation对象
     __block SDWebImageCombinedOperation *operation = [SDWebImageCombinedOperation new];
     __weak SDWebImageCombinedOperation *weakOperation = operation;
 
     BOOL isFailedUrl = NO;
     
-    /**
-     @synchronized是OC中一种方便地创建互斥锁的方式
-     self.failedURLs是一个NSSet类型的集合,里面存放的都是下载失败的图片的url,failedURLs不是NSArray类型的原因是:
-     NSSet的底层使用的可能是哈希表、红黑树这样的数据结构,查找效率很高。数组的查找效率太低了。
-     */
-    
-    // 访问failedURLs时加锁
-    @synchronized (self.failedURLs) {
-        // url是否在黑名单中
-        isFailedUrl = [self.failedURLs containsObject:url];
+    @synchronized (self.failedURLs) { // 线程安全
+        isFailedUrl = [self.failedURLs containsObject:url]; // url是否在黑名单中
     }
-    // 无效的url
+    
     if (url.absoluteString.length == 0 || (!(options & SDWebImageRetryFailed) && isFailedUrl)) {
-        // dispatch_main_sync_safe这个宏: 如果是主线程就直接在主线程调用block,否则回到主线程回调
+        // 无效的url: 执行completedBlock 返回operation
         dispatch_main_sync_safe(^{
             NSError *error = [NSError errorWithDomain:NSURLErrorDomain code:NSURLErrorFileDoesNotExist userInfo:nil];
             completedBlock(nil, error, SDImageCacheTypeNone, YES, url);
         });
-        // 退出 返回operation
         return operation;
     }
     
-    // 访问runningOperations时 加锁“self.runningOperations”
     @synchronized (self.runningOperations) {
-        // 将operation加入到runningOperations数组中 注意这里加载的是operation而不是weakOperation
+        // 将operation加入到SDWebImageManager的runningOperations数组中
         [self.runningOperations addObject:operation];
     }
     
-    
-    // 生成缓存key
-    NSString *key = [self cacheKeyForURL:url];
-    
-    
-    /**
-     queryDiskCacheForKey:done:
-        1.通过key从缓存中查询image,并进行回调--回调过程是串行队列异步任务
-        2.返回创建的cacheOperation（NSOperation类型）如果是内存缓存则cacheOperation=nil
-    */
+
+    /// 二、从硬盘缓存中查找image 获取缓存operation(NSOperation抽象类型非自定义:用来保证逻辑安全)
+    NSString *key = [self cacheKeyForURL:url];// 生成缓存key
     operation.cacheOperation = [self.imageCache queryDiskCacheForKey:key done:^(UIImage *image, SDImageCacheType cacheType) {
         
-        // 因为queryDiskCacheForKey方法中done的回调是异步任务回调时operation可能已经取消
-        if (operation.isCancelled) {
-            // 移除并且退出  ---竟然用@synchronized效率这么低的家伙加锁
-            @synchronized (self.runningOperations) {
+        if (operation.isCancelled) { // 因为queryDiskCacheForKey方法中done的回调是异步任务回调时operation可能已经取消
+            @synchronized (self.runningOperations) {  // 将operationc从数组中移除
                 [self.runningOperations removeObject:operation];
-            }
+            } 
             return;
         }
+        
 /*********
           情景一
-          1.缓存没命中或需要刷新缓存 2.shouldDownloadImageForURL
+          1.缓存没命中或需要刷新缓存
  ********/
         if ((!image || options & SDWebImageRefreshCached) && (![self.delegate respondsToSelector:@selector(imageManager:shouldDownloadImageForURL:)] || [self.delegate imageManager:self shouldDownloadImageForURL:url])) {
             
-            // 缓存命中但是需要刷新缓存
-            if (image && options & SDWebImageRefreshCached) {
-                
+            if (image && options & SDWebImageRefreshCached) { // 缓存命中但是需要刷新缓存
                 dispatch_main_sync_safe(^{
                     // If image was found in the cache but SDWebImageRefreshCached is provided, notify about the cached image
                     // AND try to re-download it in order to let a chance to NSURLCache to refresh it from server.
-                    
                     // 将命中的缓存图片回调 刷新NSURLCache操作在下面的下载过程中
                     completedBlock(image, nil, cacheType, YES, url);
                 });
@@ -245,6 +225,7 @@
             }
             
 /********* imageDownloader下载方法开始 ***************/
+            // 正宗的自定义operation
             id <SDWebImageOperation> subOperation = [self.imageDownloader downloadImageWithURL:url options:downloaderOptions progress:progressBlock completed:^(UIImage *downloadedImage, NSData *data, NSError *error, BOOL finished) {
                 
                 __strong __typeof(weakOperation) strongOperation = weakOperation;
@@ -275,7 +256,6 @@
                     }
                 }
                 else {  // 没有出错
-                    
                     // SDWebImageRetryFailed将这个url移除黑名单
                     if ((options & SDWebImageRetryFailed)) {
                         @synchronized (self.failedURLs) {
@@ -286,7 +266,6 @@
                     BOOL cacheOnDisk = !(options & SDWebImageCacheMemoryOnly);
                     
                     // 注意: image缓存的图片 downloadedImage下载的data转化成的UIImage
-                    
                     if (options & SDWebImageRefreshCached && image && !downloadedImage) {
                         // Image refresh hit the NSURLCache cache, do not call the completion block
                         // 这个操作什么也没做,仅仅为了条件判断
@@ -295,11 +274,12 @@
                     else if (downloadedImage && (!downloadedImage.images || (options & SDWebImageTransformAnimatedImage)) && [self.delegate respondsToSelector:@selector(imageManager:transformDownloadedImage:withURL:)]) {
                         
                         dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_HIGH, 0), ^{
-                            
+                            // 转换操作，比如对下载的图片做圆角裁剪
                             UIImage *transformedImage = [self.delegate imageManager:self transformDownloadedImage:downloadedImage withURL:url];
 
                             if (transformedImage && finished) {
                                 BOOL imageWasTransformed = ![transformedImage isEqual:downloadedImage];
+                                // 内存缓存
                                 [self.imageCache storeImage:transformedImage recalculateFromImage:imageWasTransformed imageData:(imageWasTransformed ? nil : data) forKey:key toDisk:cacheOnDisk];
                             }
 
@@ -312,8 +292,9 @@
                     }
                     else {
                         if (downloadedImage && finished) {
-                            // 缓存的核心方法
-                            // downloadedImage:从服务端下载的data经过转化生成的UIImage对象  data:服务端下载原始数据
+                            
+                            /// 缓存的核心方法
+                            // downloadedImage:从服务端下载的data经过转化生成的UIImage对象(可能已经解码)  data:服务端下载原始数据
                             [self.imageCache storeImage:downloadedImage recalculateFromImage:NO imageData:data forKey:key toDisk:cacheOnDisk];
                         }
 
@@ -433,6 +414,8 @@
 - (void)cancel {
     self.cancelled = YES;
     if (self.cacheOperation) {
+        // cacheOperation是硬盘查询操作中的一个抽象operation,用来保证逻辑
+        // Despite being abstract, the base implementation of NSOperation does include significant logic to coordinate the safe execution of your task.
         [self.cacheOperation cancel];
         self.cacheOperation = nil;
     }

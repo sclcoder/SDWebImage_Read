@@ -30,16 +30,18 @@ static char loadOperationKey;
     // 取消之前的操作: 相同的key时operation会被覆盖掉,在设置之前先将请求取消掉
     [self sd_cancelImageLoadOperationWithKey:key];
     NSMutableDictionary *operationDictionary = [self operationDictionary];
+    // 将operation添加到每个UIView对象的operationDic中
     [operationDictionary setObject:operation forKey:key];
 }
 
+/// 取消图片加载operation取消
 - (void)sd_cancelImageLoadOperationWithKey:(NSString *)key {
     // Cancel in progress downloader from queue
     // 获取对象的操作字典
     NSMutableDictionary *operationDictionary = [self operationDictionary];
     // 获取字典中存储的某一个值
     id operations = [operationDictionary objectForKey:key];
-    // 取消请求 从操作字典中移除该key
+    // 取消请求让后从操作字典中移除该operation
     if (operations) {
         if ([operations isKindOfClass:[NSArray class]]) {
             for (id <SDWebImageOperation> operation in operations) {
